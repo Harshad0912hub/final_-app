@@ -170,3 +170,89 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ==========================================================================
+   Dark mode retrofit.
+
+   The app's components use one-off arbitrary hex utility classes
+   (e.g. bg-[#ffffff], text-[#5a4138]) instead of shared theme tokens, so
+   there is no single palette to flip for dark mode. Rather than editing
+   every component, the most-used classes are re-themed centrally here by
+   targeting Tailwind's own generated class selectors under html.dark. This
+   covers the vast majority of surfaces (cards, borders, body/secondary
+   text) app-wide without touching component markup.
+   ========================================================================== */
+.dark .app-shell {
+  background: linear-gradient(180deg, #1d1610 0%, #17110c 55%, #120d09 100%);
+}
+.dark .app-header {
+  background: linear-gradient(90deg, #2c2016 0%, #241a12 50%, #2c2016 100%);
+}
+.dark html,
+.dark body {
+  background-color: #120d09;
+}
+
+/* Neutral surfaces */
+.dark .bg-\[\#ffffff\] { background-color: #241d17; }
+.dark .bg-white { background-color: #241d17; }
+.dark .bg-\[\#ffffff\]\/95 { background-color: #241d17f2; }
+.dark .bg-\[\#ffffff\]\/60 { background-color: #241d1799; }
+.dark .bg-\[\#eff4ff\] { background-color: #2b2119; }
+.dark .bg-\[\#dce9ff\] { background-color: #3c2c1c; }
+.dark .bg-\[\#e5eeff\] { background-color: #332619; }
+.dark .bg-\[\#cbdbf5\] { background-color: #46331f; }
+.dark .border-\[\#eff4ff\] { border-color: #3a2c20; }
+.dark .border-\[\#dce9ff\] { border-color: #46341f; }
+.dark .border-\[\#e5eeff\] { border-color: #3a2c20; }
+.dark .border-\[\#cbdbf5\] { border-color: #46341f; }
+
+/* Body text */
+.dark .text-\[\#0b1c30\] { color: #f3e9de; }
+.dark .text-\[\#5a4138\] { color: #cbb29e; }
+.dark .text-\[\#5a4138\]\/50 { color: #cbb29e80; }
+.dark .text-\[\#5a4138\]\/40 { color: #cbb29e66; }
+.dark .text-\[\#5a4138\]\/80 { color: #cbb29ecc; }
+
+/* Brand + status text/icons - brightened so they stay legible on dark surfaces */
+.dark .text-\[\#a33900\] { color: #ff9d5c; }
+.dark .text-\[\#a33900\]\/20 { color: #ff9d5c33; }
+.dark .border-\[\#a33900\] { border-color: #ff9d5c; }
+.dark .text-\[\#8d4b00\] { color: #ffb066; }
+.dark .text-\[\#007230\] { color: #6fe39a; }
+.dark .text-\[\#006e2d\] { color: #5fdb8f; }
+.dark .text-\[\#1b5e20\] { color: #8fd99f; }
+.dark .text-\[\#ba1a1a\] { color: #ffb4ab; }
+.dark .text-\[\#b71c1c\] { color: #ffb4ab; }
+.dark .text-\[\#93000a\] { color: #ffb4ab; }
+
+/* Low-opacity tint backgrounds behind icons */
+.dark .bg-\[\#a33900\]\/10 { background-color: rgba(255, 157, 92, 0.16); }
+.dark .bg-\[\#a33900\]\/20 { background-color: rgba(255, 157, 92, 0.24); }
+.dark .bg-\[\#ba1a1a\]\/10 { background-color: rgba(255, 180, 171, 0.16); }
+
+/* Error/due-amount cards and badges (light pink family) */
+.dark .bg-\[\#ffdad6\] { background-color: rgba(255, 138, 128, 0.18); }
+.dark .bg-\[\#ffdad6\]\/40 { background-color: rgba(255, 138, 128, 0.10); }
+.dark .bg-\[\#ffdad6\]\/60 { background-color: rgba(255, 138, 128, 0.14); }
+.dark .bg-\[\#ffdad6\]\/80 { background-color: rgba(255, 138, 128, 0.18); }
+
+/* Splash screen (shown before React mounts - see index.html) */
+#app-splash {
+  background: linear-gradient(180deg, #fff6ec 0%, #f8f9ff 55%, #eef1ff 100%);
+}
+#app-splash .splash-title {
+  color: #0b1c30;
+}
+#app-splash .splash-subtitle {
+  color: #5a4138;
+}
+html.dark #app-splash {
+  background: linear-gradient(180deg, #1d1610 0%, #17110c 55%, #120d09 100%);
+}
+html.dark #app-splash .splash-title {
+  color: #f3e9de;
+}
+html.dark #app-splash .splash-subtitle {
+  color: #cbb29e;
+}

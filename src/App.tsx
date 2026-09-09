@@ -43,6 +43,25 @@ import {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      return localStorage.getItem('shravani_theme') === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    try {
+      localStorage.setItem('shravani_theme', theme);
+    } catch {
+      // ignore
+    }
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+
   const [isCloudConnected, setIsCloudConnected] = useState(true);
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>(() => {
@@ -605,7 +624,7 @@ export default function App() {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
 
   return (
-    <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex flex-col selection:bg-[#a33900]/20">
+    <div className="app-shell min-h-screen bg-gradient-to-b from-[#fff6ec] via-[#f8f9ff] to-[#eef1ff] text-[#0b1c30] flex flex-col selection:bg-[#a33900]/20">
       {/* Top Header */}
       <Header
         customerCount={customers.length}
@@ -614,6 +633,8 @@ export default function App() {
         isInstallable={isInstallable || isIOS}
         isInstalled={isInstalled}
         isCloudSynced={isCloudConnected}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Main Screen Content */}

@@ -8,6 +8,8 @@ interface HeaderProps {
   isInstalled?: boolean;
   customerCount?: number;
   isCloudSynced?: boolean;
+  theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,6 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   isInstalled = false,
   customerCount = 0,
   isCloudSynced = true,
+  theme = 'light',
+  onToggleTheme,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -30,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="fixed top-0 inset-x-0 z-40 bg-[#ffffff]/95 backdrop-blur-xl shadow-[0_1px_8px_rgba(11,28,48,0.04)] border-b border-[#eff4ff]">
+      <header className="app-header fixed top-0 inset-x-0 z-40 bg-gradient-to-r from-[#ffe9d6] via-[#fffaf5] to-[#ffe0cc] backdrop-blur-xl shadow-[0_1px_8px_rgba(11,28,48,0.04)] border-b border-[#ffdbce]/50">
         <div className="max-w-md mx-auto h-16 px-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-10 h-10 rounded-xl overflow-hidden bg-[#a33900]/10 flex items-center justify-center flex-shrink-0 shadow-sm border border-[#ffdbce]/40">
@@ -107,6 +111,31 @@ export const Header: React.FC<HeaderProps> = ({
                       <span className="material-symbols-outlined text-[18px] text-[#a33900]">translate</span>
                       <span>{language === 'mr' ? 'भाषा: English' : 'Language: मराठी'}</span>
                     </button>
+
+                    {/* Dark Mode Toggle */}
+                    {onToggleTheme && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onToggleTheme();
+                        }}
+                        className="flex items-center justify-between gap-2.5 px-3 py-2 text-left rounded-xl text-[13px] font-semibold text-[#0b1c30] hover:bg-[#eff4ff] active:scale-98 transition-all"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <span className="material-symbols-outlined text-[18px] text-[#a33900]">
+                            {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+                          </span>
+                          <span>{language === 'mr' ? 'गडद मोड' : 'Dark Mode'}</span>
+                        </span>
+                        <span
+                          className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${
+                            theme === 'dark' ? 'bg-[#a33900] justify-end' : 'bg-[#dce9ff] justify-start'
+                          }`}
+                        >
+                          <span className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: '#ffffff' }} />
+                        </span>
+                      </button>
+                    )}
 
                     {/* Install App button if not already running standalone */}
                     {!isInstalled && onInstallPWA && (
