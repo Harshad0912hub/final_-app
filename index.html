@@ -24,6 +24,38 @@
   </head>
   <body class="bg-[#f8f9ff] text-[#0b1c30] antialiased selection:bg-[#a33900]/20 min-h-screen">
     <div id="root"></div>
+    <div
+      id="app-splash"
+      style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#f8f9ff;transition:opacity 0.5s ease;"
+    >
+      <img
+        src="/splash-swami.jpeg"
+        alt="श्री स्वामी समर्थ"
+        style="width:150px;height:150px;object-fit:cover;border-radius:50%;border:4px solid #a33900;box-shadow:0 10px 30px rgba(163,57,0,0.25);"
+      />
+      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:20px;color:#0b1c30;letter-spacing:-0.01em;">
+        श्रावणी टिफीन सेंटर
+      </div>
+      <div style="font-family:'Inter',sans-serif;font-size:13px;color:#5a4138;">श्री स्वामी समर्थ</div>
+    </div>
+    <script>
+      (function () {
+        var MIN_DISPLAY_MS = 1800;
+        var start = Date.now();
+        function hideSplash() {
+          var el = document.getElementById('app-splash');
+          if (!el) return;
+          var wait = Math.max(0, MIN_DISPLAY_MS - (Date.now() - start));
+          setTimeout(function () {
+            el.style.opacity = '0';
+            setTimeout(function () {
+              el.remove();
+            }, 500);
+          }, wait);
+        }
+        window.addEventListener('load', hideSplash);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
