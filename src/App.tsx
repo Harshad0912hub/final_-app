@@ -407,8 +407,8 @@ export default function App() {
           evening: { status: 'pending' as const, price: cust.ratePerTiffin, dietType: cust.dietType || 'veg' },
         };
 
-      const sessionStatus = session === 'morning' ? existing.morning?.status : existing.evening?.status;
-      const currentStatus = sessionStatus || 'pending';
+      const sessionRecord = session === 'morning' ? existing.morning : existing.evening;
+      const currentStatus = sessionRecord?.status || 'pending';
       if (targetStatus === 'delivered' && currentStatus !== 'pending') return;
       if (targetStatus === 'pending' && currentStatus !== 'delivered') return;
 
@@ -418,8 +418,10 @@ export default function App() {
         customerId: cust.id,
         [session]: {
           status: targetStatus,
-          price: cust.ratePerTiffin,
-          dietType: cust.dietType || 'veg',
+          // Keep whatever rate was already picked for this customer/day (e.g. via
+          // the price picker) instead of silently resetting it to their regular rate.
+          price: sessionRecord?.price ?? cust.ratePerTiffin,
+          dietType: sessionRecord?.dietType || cust.dietType || 'veg',
         },
       };
 
