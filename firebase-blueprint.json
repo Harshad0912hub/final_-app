@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "Customer": {
+      "title": "Customer",
+      "description": "A tiffin customer record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "address": { "type": "string", "maxLength": 200 },
+        "mealTiming": { "type": "string", "enum": ["morning", "night", "both"] },
+        "mealTimingLabel": { "type": "string", "maxLength": 50 },
+        "ratePerTiffin": { "type": "number" },
+        "active": { "type": "boolean" },
+        "morningDelivered": { "type": "boolean" },
+        "nightDelivered": { "type": "boolean" },
+        "morningPrice": { "type": "number" },
+        "nightPrice": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "ratePerTiffin", "active"]
+    },
+    "DailyDeliveryRecord": {
+      "title": "DailyDeliveryRecord",
+      "description": "Daily attendance and rate for customer delivery",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "date": { "type": "string" },
+        "morningStatus": { "type": "string" },
+        "nightStatus": { "type": "string" },
+        "morningPrice": { "type": "number" },
+        "nightPrice": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "date"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment advance transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "note": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "amount", "date"]
+    }
+  },
+  "firestore": {
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Collection of tiffin center customers"
+    },
+    "/daily_deliveries/{deliveryId}": {
+      "schema": { "$ref": "#/entities/DailyDeliveryRecord" },
+      "description": "Daily delivery attendance and price records"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Customer payments and advance ledgers"
+    }
+  }
+}

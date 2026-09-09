@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c84a00"/>
+      <stop offset="100%" stop-color="#8d2e00"/>
+    </linearGradient>
+    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#f0f3f8"/>
+      <stop offset="100%" stop-color="#dce1eb"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle with safe-zone margin -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)"/>
+
+  <!-- Subtle inner glow ring -->
+  <rect x="16" y="16" width="480" height="480" rx="100" fill="none" stroke="#ffffff" stroke-width="4" stroke-opacity="0.2"/>
+
+  <!-- Tiffin Container Assembly (Centered in 80% safe zone) -->
+  <g filter="url(#shadow)">
+    <!-- Tiffin Top Handle Bracket -->
+    <path d="M 216 100 Q 256 70 296 100" fill="none" stroke="url(#silverGrad)" stroke-width="16" stroke-linecap="round"/>
+    <!-- Center Grip Ring -->
+    <circle cx="256" cy="120" r="16" fill="url(#silverGrad)"/>
+
+    <!-- Side Fastener Rods (Left & Right) -->
+    <rect x="144" y="145" width="12" height="235" rx="6" fill="#e8edf5"/>
+    <rect x="356" y="145" width="12" height="235" rx="6" fill="#e8edf5"/>
+
+    <!-- Tier 1 (Top Container) -->
+    <rect x="160" y="140" width="192" height="65" rx="16" fill="url(#silverGrad)"/>
+    <line x1="168" y1="172" x2="344" y2="172" stroke="#cbd4e1" stroke-width="3"/>
+
+    <!-- Tier 2 (Middle Container) -->
+    <rect x="160" y="215" width="192" height="65" rx="16" fill="url(#silverGrad)"/>
+    <line x1="168" y1="247" x2="344" y2="247" stroke="#cbd4e1" stroke-width="3"/>
+
+    <!-- Tier 3 (Bottom Container) -->
+    <rect x="160" y="290" width="192" height="75" rx="16" fill="url(#silverGrad)"/>
+    <line x1="168" y1="325" x2="344" y2="325" stroke="#cbd4e1" stroke-width="3"/>
+
+    <!-- Decorative warm steam / aroma waves -->
+    <path d="M 230 70 Q 235 50 240 70" fill="none" stroke="#ffeedd" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+    <path d="M 256 60 Q 261 40 266 60" fill="none" stroke="#ffeedd" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+    <path d="M 282 70 Q 287 50 292 70" fill="none" stroke="#ffeedd" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+  </g>
+
+  <!-- Marathi Text 'श्रावणी' on Bottom Tier -->
+  <text x="256" y="420" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="34" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="1">
+    SHRAVANI TIFFIN
+  </text>
+  <text x="256" y="455" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="20" font-weight="600" fill="#ffdcc3" text-anchor="middle">
+    ९८२३७८४१४२
+  </text>
+</svg>

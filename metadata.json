@@ -1,0 +1,6 @@
+{
+  "name": "श्रावणी टिफीन सेंटर",
+  "description": "श्रावणी टिफीन सेंटर - दैनिक टिफीन वाटप, ग्राहक यादी, मासिक बिल आणि व्हॉट्सॲप पावती व्यवस्थापन",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

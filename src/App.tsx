@@ -1,0 +1,740 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import { Header } from './components/Header';
+import { BottomNav } from './components/BottomNav';
+import { TodayScreen } from './components/TodayScreen';
+import { CustomersScreen } from './components/CustomersScreen';
+import { ReportsScreen } from './components/ReportsScreen';
+import { PricePickerModal } from './components/PricePickerModal';
+import { CustomerModal } from './components/CustomerModal';
+import { AdvancePaymentModal } from './components/AdvancePaymentModal';
+import { WhatsAppInvoicePreview } from './components/WhatsAppInvoicePreview';
+import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { usePWAInstall } from './utils/usePWAInstall';
+import {
+  Customer,
+  DayDelivery,
+  PaymentRecord,
+  ActiveTab,
+  PricePickerState,
+} from './types';
+import {
+  INITIAL_CUSTOMERS,
+  INITIAL_DAY_DELIVERIES,
+  INITIAL_PAYMENTS,
+} from './data/initialData';
+import {
+  testFirestoreConnection,
+  fetchCustomersFromFirestore,
+  saveCustomerToFirestore,
+  deleteCustomerFromFirestore,
+  fetchDeliveriesFromFirestore,
+  saveDeliveryToFirestore,
+  fetchPaymentsFromFirestore,
+  savePaymentToFirestore,
+  deletePaymentFromFirestore,
+  clearFirestoreData,
+} from './firebase';
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState<ActiveTab>('today');
+  const [isCloudConnected, setIsCloudConnected] = useState(true);
+  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    try {
+      const saved = localStorage.getItem('shravani_customers');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Exclude any legacy sample/dummy customer entries
+        return parsed.filter(
+          (c: Customer) =>
+            !['cust-1', 'cust-2', 'cust-3', 'cust-4', 'cust-5', 'cust-6', 'cust-7'].includes(c.id) &&
+            c.name !== 'सचिन पाटील' &&
+            c.name !== 'राहुल जोशी'
+        );
+      }
+      return INITIAL_CUSTOMERS;
+    } catch {
+      return INITIAL_CUSTOMERS;
+    }
+  });
+
+  const [dayDeliveries, setDayDeliveries] = useState<Record<string, DayDelivery>>(() => {
+    try {
+      const saved = localStorage.getItem('shravani_deliveries');
+      return saved ? JSON.parse(saved) : INITIAL_DAY_DELIVERIES;
+    } catch {
+      return {};
+    }
+  });
+
+  const [payments, setPayments] = useState<PaymentRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('shravani_payments');
+      return saved ? JSON.parse(saved) : INITIAL_PAYMENTS;
+    } catch {
+      return INITIAL_PAYMENTS;
+    }
+  });
+
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('shravani_customers');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) return parsed[0].id;
+      }
+    } catch {
+      // ignore
+    }
+    return '';
+  });
+
+  // Load from Firebase Firestore on Mount
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCloudData() {
+      setIsLoadingCloud(true);
+      try {
+        const isConnected = await testFirestoreConnection();
+        if (!isMounted) return;
+        setIsCloudConnected(isConnected);
+
+        if (isConnected) {
+          const [remoteCusts, remoteDeliveries, remotePayments] = await Promise.all([
+            fetchCustomersFromFirestore(),
+            fetchDeliveriesFromFirestore(),
+            fetchPaymentsFromFirestore(),
+          ]);
+
+          if (!isMounted) return;
+
+          if (remoteCusts && remoteCusts.length > 0) {
+            const cleanCusts = remoteCusts.filter(
+              (c) =>
+                !['cust-1', 'cust-2', 'cust-3', 'cust-4', 'cust-5', 'cust-6', 'cust-7'].includes(c.id) &&
+                c.name !== 'सचिन पाटील' &&
+                c.name !== 'राहुल जोशी'
+            );
+            setCustomers(cleanCusts);
+            if (cleanCusts.length > 0) {
+              if (!selectedCustomerId || !cleanCusts.some((c) => c.id === selectedCustomerId)) {
+                setSelectedCustomerId(cleanCusts[0].id);
+              }
+            } else {
+              setSelectedCustomerId('');
+            }
+          }
+
+          if (remoteDeliveries && Object.keys(remoteDeliveries).length > 0) {
+            setDayDeliveries(remoteDeliveries);
+          }
+
+          if (remotePayments && remotePayments.length > 0) {
+            setPayments(remotePayments);
+          }
+        }
+      } catch (e) {
+        console.warn('Firebase initial load skipped or offline:', e);
+      } finally {
+        if (isMounted) setIsLoadingCloud(false);
+      }
+    }
+
+    loadCloudData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Sync state to localStorage
+  useEffect(() => {
+    localStorage.setItem('shravani_customers', JSON.stringify(customers));
+  }, [customers]);
+
+  useEffect(() => {
+    localStorage.setItem('shravani_deliveries', JSON.stringify(dayDeliveries));
+  }, [dayDeliveries]);
+
+  useEffect(() => {
+    localStorage.setItem('shravani_payments', JSON.stringify(payments));
+  }, [payments]);
+
+  // Handler: Clear All Data
+  const handleClearAllData = async () => {
+    setCustomers([]);
+    setDayDeliveries({});
+    setPayments([]);
+    setSelectedCustomerId('');
+    localStorage.removeItem('shravani_customers');
+    localStorage.removeItem('shravani_deliveries');
+    localStorage.removeItem('shravani_payments');
+
+    // Also clear from cloud database
+    await clearFirestoreData();
+    triggerToast('सर्व डेटा हटवला! आता खरे ग्राहक जोडू शकता.');
+  };
+
+  // Modal States
+  const [pricePicker, setPricePicker] = useState<PricePickerState>({
+    isOpen: false,
+    customerId: '',
+    session: 'morning',
+    currentPrice: 70,
+    currentStatus: 'pending',
+  });
+
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
+
+  const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
+  const [paymentToEdit, setPaymentToEdit] = useState<PaymentRecord | null>(null);
+  const [showWhatsAppInvoice, setShowWhatsAppInvoice] = useState(false);
+  const [invoiceMetrics, setInvoiceMetrics] = useState({
+    totalTiffins: 52,
+    totalBill: 3380,
+    paidAmount: 2280,
+    dueAmount: 1100,
+  });
+
+  // Global toast feedback
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2500);
+  };
+
+  // Dynamic Marathi date formatter
+  const getMarathiDateStr = (d: Date = new Date()): string => {
+    const marathiDigits = ['०','१','२','३','४','५','६','७','८','९'];
+    const toMarathi = (n: number) => String(n).split('').map(c => marathiDigits[+c]).join('');
+    const marathiMonths = ['जानेवारी','फेब्रुवारी','मार्च','एप्रिल','मे','जून','जुलै','ऑगस्ट','सप्टेंबर','ऑक्टोबर','नोव्हेंबर','डिसेंबर'];
+    return `${toMarathi(d.getDate())} ${marathiMonths[d.getMonth()]} ${toMarathi(d.getFullYear())}`;
+  };
+
+  const getMarathiMonthYearStr = (d: Date = new Date()): string => {
+    const marathiDigits = ['०','१','२','३','४','५','६','७','८','९'];
+    const toMarathi = (n: number) => String(n).split('').map(c => marathiDigits[+c]).join('');
+    const marathiMonths = ['जानेवारी','फेब्रुवारी','मार्च','एप्रिल','मे','जून','जुलै','ऑगस्ट','सप्टेंबर','ऑक्टोबर','नोव्हेंबर','डिसेंबर'];
+    return `${marathiMonths[d.getMonth()]} ${toMarathi(d.getFullYear())}`;
+  };
+
+  // Handler: Open Price Picker
+  const handleOpenPricePicker = (
+    customer: Customer,
+    session: 'morning' | 'evening',
+    dateKey?: string,
+    formattedDateStr?: string
+  ) => {
+    const activeDateKey = dateKey || '2026-09-09';
+    const rec =
+      dayDeliveries[`${activeDateKey}_${customer.id}`] ||
+      (activeDateKey === '2026-09-09' ? dayDeliveries[customer.id] : undefined);
+    const sessionRec = session === 'morning' ? rec?.morning : rec?.evening;
+    setPricePicker({
+      isOpen: true,
+      customerId: customer.id,
+      session,
+      currentPrice: sessionRec?.price || customer.ratePerTiffin,
+      currentStatus: sessionRec?.status || 'pending',
+      currentDietType: sessionRec?.dietType || customer.dietType || 'veg',
+      dateKey: activeDateKey,
+      formattedDateStr: formattedDateStr,
+    });
+  };
+
+  // Handler: Confirm delivery from Price Picker
+  const handleConfirmDelivery = (price: number, dietType?: DietType) => {
+    const custId = pricePicker.customerId;
+    const session = pricePicker.session;
+    const activeDateKey = pricePicker.dateKey || '2026-09-09';
+    const cust = customers.find((c) => c.id === custId);
+    const chosenDiet: DietType = dietType || pricePicker.currentDietType || cust?.dietType || 'veg';
+
+    const existing =
+      dayDeliveries[`${activeDateKey}_${custId}`] ||
+      (activeDateKey === '2026-09-09' ? dayDeliveries[custId] : undefined) || {
+        dateKey: activeDateKey,
+        customerId: custId,
+        morning: { status: 'pending', price: cust?.ratePerTiffin || 70, dietType: cust?.dietType || 'veg' },
+        evening: { status: 'pending', price: cust?.ratePerTiffin || 70, dietType: cust?.dietType || 'veg' },
+      };
+
+    const updatedDelivery: DayDelivery = {
+      ...existing,
+      dateKey: activeDateKey,
+      customerId: custId,
+      [session]: {
+        status: 'delivered',
+        price,
+        dietType: chosenDiet,
+      },
+    };
+
+    setDayDeliveries((prev) => ({
+      ...prev,
+      [`${activeDateKey}_${custId}`]: updatedDelivery,
+      ...(activeDateKey === '2026-09-09' ? { [custId]: updatedDelivery } : {}),
+    }));
+
+    setPricePicker((prev) => ({ ...prev, isOpen: false }));
+    const dietLabel = chosenDiet === 'non-veg' ? 'नॉन-व्हेज' : 'व्हेज';
+    triggerToast(`${cust?.name || 'ग्राहक'}: ₹${price} (${dietLabel}) डबा नोंदवला!`);
+
+    saveDeliveryToFirestore(custId, updatedDelivery).catch((err) =>
+      console.warn('Delivery save to cloud skipped:', err)
+    );
+  };
+
+  // Handler: Mark leave from Price Picker
+  const handleMarkLeave = () => {
+    const custId = pricePicker.customerId;
+    const session = pricePicker.session;
+    const activeDateKey = pricePicker.dateKey || '2026-09-09';
+    const cust = customers.find((c) => c.id === custId);
+
+    const existing =
+      dayDeliveries[`${activeDateKey}_${custId}`] ||
+      (activeDateKey === '2026-09-09' ? dayDeliveries[custId] : undefined) || {
+        dateKey: activeDateKey,
+        customerId: custId,
+        morning: { status: 'pending', price: cust?.ratePerTiffin || 70, dietType: cust?.dietType || 'veg' },
+        evening: { status: 'pending', price: cust?.ratePerTiffin || 70, dietType: cust?.dietType || 'veg' },
+      };
+
+    const updatedDelivery: DayDelivery = {
+      ...existing,
+      dateKey: activeDateKey,
+      customerId: custId,
+      [session]: {
+        status: 'leave',
+        price: 0,
+        label: 'सुट्टी (रद्द)',
+      },
+    };
+
+    setDayDeliveries((prev) => ({
+      ...prev,
+      [`${activeDateKey}_${custId}`]: updatedDelivery,
+      ...(activeDateKey === '2026-09-09' ? { [custId]: updatedDelivery } : {}),
+    }));
+
+    setPricePicker((prev) => ({ ...prev, isOpen: false }));
+    triggerToast(`${cust?.name || 'ग्राहक'}: आज सुट्टी नोंदवली.`);
+
+    saveDeliveryToFirestore(custId, updatedDelivery).catch((err) =>
+      console.warn('Delivery save to cloud skipped:', err)
+    );
+  };
+
+  // Handler: Clear mark from Price Picker
+  const handleClearMark = () => {
+    const custId = pricePicker.customerId;
+    const session = pricePicker.session;
+    const activeDateKey = pricePicker.dateKey || '2026-09-09';
+    const cust = customers.find((c) => c.id === custId);
+
+    const existing =
+      dayDeliveries[`${activeDateKey}_${custId}`] ||
+      (activeDateKey === '2026-09-09' ? dayDeliveries[custId] : undefined);
+    if (!existing) return;
+
+    const updatedDelivery: DayDelivery = {
+      ...existing,
+      dateKey: activeDateKey,
+      customerId: custId,
+      [session]: {
+        status: 'pending',
+        price: cust?.ratePerTiffin || 70,
+        dietType: cust?.dietType || 'veg',
+      },
+    };
+
+    setDayDeliveries((prev) => ({
+      ...prev,
+      [`${activeDateKey}_${custId}`]: updatedDelivery,
+      ...(activeDateKey === '2026-09-09' ? { [custId]: updatedDelivery } : {}),
+    }));
+
+    setPricePicker((prev) => ({ ...prev, isOpen: false }));
+    triggerToast('नोंद यशस्वीपणे हटवली गेली.');
+
+    saveDeliveryToFirestore(custId, updatedDelivery).catch((err) =>
+      console.warn('Delivery save to cloud skipped:', err)
+    );
+  };
+
+  // Handler: Batch mark all pending customers for a session as delivered
+  const handleBatchMarkSession = (session: 'morning' | 'evening', dateKey: string) => {
+    const activeDateKey = dateKey || '2026-09-09';
+    const activeCustomers = customers.filter((c) => c.status === 'active');
+    const updates: Record<string, DayDelivery> = {};
+    let count = 0;
+
+    activeCustomers.forEach((cust) => {
+      const sessionApplicable =
+        session === 'morning'
+          ? cust.mealTiming === 'both' || cust.mealTiming === 'morning'
+          : cust.mealTiming === 'both' || cust.mealTiming === 'night';
+      if (!sessionApplicable) return;
+
+      const existing =
+        dayDeliveries[`${activeDateKey}_${cust.id}`] ||
+        (activeDateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined) || {
+          dateKey: activeDateKey,
+          customerId: cust.id,
+          morning: { status: 'pending' as const, price: cust.ratePerTiffin, dietType: cust.dietType || 'veg' },
+          evening: { status: 'pending' as const, price: cust.ratePerTiffin, dietType: cust.dietType || 'veg' },
+        };
+
+      const sessionStatus = session === 'morning' ? existing.morning?.status : existing.evening?.status;
+      if (sessionStatus !== 'pending') return;
+
+      const updated: DayDelivery = {
+        ...existing,
+        dateKey: activeDateKey,
+        customerId: cust.id,
+        [session]: {
+          status: 'delivered',
+          price: cust.ratePerTiffin,
+          dietType: cust.dietType || 'veg',
+        },
+      };
+
+      updates[`${activeDateKey}_${cust.id}`] = updated;
+      if (activeDateKey === '2026-09-09') updates[cust.id] = updated;
+      count++;
+
+      saveDeliveryToFirestore(cust.id, updated).catch((err) =>
+        console.warn('Batch delivery save to cloud skipped:', err)
+      );
+    });
+
+    if (count > 0) {
+      setDayDeliveries((prev) => ({ ...prev, ...updates }));
+      const sessionLabel = session === 'morning' ? 'सकाळचे' : 'रात्रीचे';
+      triggerToast(`${sessionLabel} ${count} ग्राहकांचे डबे नोंदवले! ✅`);
+    }
+  };
+
+  // Handler: Save or Update Customer
+  const handleSaveCustomer = (customerData: Partial<Customer>) => {
+    if (customerToEdit) {
+      const updatedCust: Customer = { ...customerToEdit, ...customerData };
+      setCustomers((prev) =>
+        prev.map((c) => (c.id === customerToEdit.id ? updatedCust : c))
+      );
+      triggerToast(`${customerData.name || 'ग्राहक'} माहिती अद्ययावत केली!`);
+      saveCustomerToFirestore(updatedCust).catch((err) =>
+        console.warn('Customer update to cloud skipped:', err)
+      );
+    } else {
+      const newCust: Customer = {
+        id: `cust-${Date.now()}`,
+        name: customerData.name || '',
+        initial: customerData.initial || (customerData.name ? customerData.name.charAt(0) : 'ग'),
+        phone: customerData.phone || '',
+        address: customerData.address || '',
+        shortAddress: customerData.shortAddress || '',
+        mealTiming: customerData.mealTiming || 'both',
+        mealTimingLabel: customerData.mealTimingLabel || 'दोन वेळ',
+        ratePerTiffin: customerData.ratePerTiffin || 70,
+        monthlyCharge: customerData.monthlyCharge || '₹२,४०० / महिना',
+        dietType: customerData.dietType || 'veg',
+        specialNote: customerData.specialNote || 'साधा डबा',
+        status: 'active',
+        avatarBg: 'bg-primary/10 text-[#a33900]',
+      };
+      setCustomers((prev) => [newCust, ...prev]);
+      if (!selectedCustomerId) setSelectedCustomerId(newCust.id);
+      triggerToast(`नवीन ग्राहक '${newCust.name}' जोडला गेला!`);
+      saveCustomerToFirestore(newCust).catch((err) =>
+        console.warn('Customer add to cloud skipped:', err)
+      );
+    }
+    setCustomerModalOpen(false);
+    setCustomerToEdit(null);
+  };
+
+  // Handler: Toggle Customer Active/Inactive
+  const handleToggleCustomerStatus = (customerId: string, status: 'active' | 'inactive') => {
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id === customerId) {
+          const updated = { ...c, status };
+          saveCustomerToFirestore(updated).catch((err) =>
+            console.warn('Customer status update skipped:', err)
+          );
+          return updated;
+        }
+        return c;
+      })
+    );
+    triggerToast(
+      status === 'active' ? 'ग्राहक पुन्हा सक्रिय केला!' : 'ग्राहक तात्पुरता बंद केला.'
+    );
+  };
+
+  // Handler: Delete Customer
+  const handleDeleteCustomer = (customerId: string) => {
+    const custToDelete = customers.find((c) => c.id === customerId);
+    setCustomers((prev) => {
+      const updated = prev.filter((c) => c.id !== customerId);
+      if (selectedCustomerId === customerId) {
+        setSelectedCustomerId(updated.length > 0 ? updated[0].id : '');
+      }
+      return updated;
+    });
+
+    // Clean up any deliveries recorded for this customer
+    setDayDeliveries((prev) => {
+      const updated = { ...prev };
+      delete updated[customerId];
+      Object.keys(updated).forEach((k) => {
+        if (k.includes(customerId)) {
+          delete updated[k];
+        }
+      });
+      return updated;
+    });
+
+    triggerToast(`'${custToDelete?.name || 'ग्राहक'}' कायमचा काढून टाकला.`);
+    deleteCustomerFromFirestore(customerId).catch((err) =>
+      console.warn('Customer delete from cloud skipped:', err)
+    );
+  };
+
+  // Handler: Save or Update Advance Payment
+  const handleSavePayment = (paymentData: {
+    id?: string;
+    amount: number;
+    method: 'cash' | 'gpay' | 'bank';
+    title: string;
+    note: string;
+  }) => {
+    if (paymentData.id) {
+      setPayments((prev) =>
+        prev.map((p) =>
+          p.id === paymentData.id
+            ? {
+                ...p,
+                amount: paymentData.amount,
+                method: paymentData.method,
+                title: paymentData.title,
+                note: paymentData.note,
+              }
+            : p
+        )
+      );
+      const existingPay = payments.find((p) => p.id === paymentData.id);
+      const updatedPayment: PaymentRecord = {
+        id: paymentData.id,
+        customerId: existingPay?.customerId || selectedCustomerId,
+        amount: paymentData.amount,
+        dateStr: existingPay?.dateStr || getMarathiDateStr(),
+        method: paymentData.method,
+        title: paymentData.title,
+        note: paymentData.note,
+      };
+      triggerToast(`₹${paymentData.amount} पेमेंट नोंद अद्ययावत केली!`);
+      savePaymentToFirestore(updatedPayment).catch((err) =>
+        console.warn('Payment update to cloud skipped:', err)
+      );
+    } else {
+      const newPayment: PaymentRecord = {
+        id: `pay-${Date.now()}`,
+        customerId: selectedCustomerId,
+        amount: paymentData.amount,
+        dateStr: getMarathiDateStr(),
+        method: paymentData.method,
+        title: paymentData.title,
+        note: paymentData.note,
+      };
+      setPayments((prev) => [newPayment, ...prev]);
+      triggerToast(`₹${paymentData.amount} ॲडव्हान्स जमा नोंदवले!`);
+      savePaymentToFirestore(newPayment).catch((err) =>
+        console.warn('Payment save to cloud skipped:', err)
+      );
+    }
+    setPaymentToEdit(null);
+  };
+
+  // Handler: Delete Payment
+  const handleDeletePayment = (paymentId: string) => {
+    const payToDelete = payments.find((p) => p.id === paymentId);
+    setPayments((prev) => prev.filter((p) => p.id !== paymentId));
+    triggerToast(`₹${payToDelete?.amount || ''} पेमेंट नोंद हटवली.`);
+    deletePaymentFromFirestore(paymentId).catch((err) =>
+      console.warn('Payment delete from cloud skipped:', err)
+    );
+  };
+
+  // Active customer for modals
+  const activeCustomerForPicker = customers.find((c) => c.id === pricePicker.customerId) || null;
+  const activeCustomerForReports =
+    customers.find((c) => c.id === selectedCustomerId) || customers[0];
+
+  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
+
+  return (
+    <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex flex-col selection:bg-[#a33900]/20">
+      {/* Top Header */}
+      <Header
+        customerCount={customers.length}
+        onClearAllData={handleClearAllData}
+        onInstallPWA={install}
+        isInstallable={isInstallable || isIOS}
+        isInstalled={isInstalled}
+        isCloudSynced={isCloudConnected}
+      />
+
+      {/* Main Screen Content */}
+      <main className="flex-1 flex flex-col relative w-full pt-16 pb-20 px-3 max-w-md mx-auto">
+        {/* PWA Install Banner on mobile/desktop browsers */}
+        <PWAInstallBanner />
+
+        {showWhatsAppInvoice && activeCustomerForReports ? (
+          <WhatsAppInvoicePreview
+            customer={activeCustomerForReports}
+            totalTiffins={invoiceMetrics.totalTiffins}
+            totalBill={invoiceMetrics.totalBill}
+            paidAmount={invoiceMetrics.paidAmount}
+            dueAmount={invoiceMetrics.dueAmount}
+            monthStr={getMarathiMonthYearStr()}
+            payments={payments}
+            onBack={() => setShowWhatsAppInvoice(false)}
+          />
+        ) : activeTab === 'today' ? (
+          <TodayScreen
+            customers={customers}
+            dayDeliveries={dayDeliveries}
+            onOpenPricePicker={handleOpenPricePicker}
+            onAddFirstCustomer={() => {
+              setActiveTab('customers');
+              setCustomerToEdit(null);
+              setCustomerModalOpen(true);
+            }}
+            onOpenEditModal={(cust) => {
+              setCustomerToEdit(cust);
+              setCustomerModalOpen(true);
+            }}
+            onDeleteCustomer={handleDeleteCustomer}
+            onBatchMarkSession={handleBatchMarkSession}
+          />
+        ) : activeTab === 'customers' ? (
+          <CustomersScreen
+            customers={customers}
+            onOpenAddModal={() => {
+              setCustomerToEdit(null);
+              setCustomerModalOpen(true);
+            }}
+            onOpenEditModal={(cust) => {
+              setCustomerToEdit(cust);
+              setCustomerModalOpen(true);
+            }}
+            onToggleCustomerStatus={handleToggleCustomerStatus}
+            onDeleteCustomer={handleDeleteCustomer}
+          />
+        ) : (
+          <ReportsScreen
+            customers={customers}
+            selectedCustomerId={selectedCustomerId}
+            onSelectCustomer={setSelectedCustomerId}
+            payments={payments}
+            dayDeliveries={dayDeliveries}
+            onOpenAdvancePaymentModal={() => {
+              setPaymentToEdit(null);
+              setAdvanceModalOpen(true);
+            }}
+            onEditPayment={(payment) => {
+              setPaymentToEdit(payment);
+              setAdvanceModalOpen(true);
+            }}
+            onDeletePayment={handleDeletePayment}
+            onAddCustomer={() => {
+              setActiveTab('customers');
+              setCustomerToEdit(null);
+              setCustomerModalOpen(true);
+            }}
+            onOpenWhatsAppInvoice={(metrics) => {
+              setInvoiceMetrics(metrics);
+              setShowWhatsAppInvoice(true);
+            }}
+          />
+        )}
+      </main>
+
+      {/* Bottom Navigation */}
+      {!showWhatsAppInvoice && (
+        <BottomNav
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setShowWhatsAppInvoice(false);
+            setActiveTab(tab);
+          }}
+        />
+      )}
+
+      {/* Price Picker Bottom Sheet Modal */}
+      <PricePickerModal
+        isOpen={pricePicker.isOpen}
+        customer={activeCustomerForPicker}
+        session={pricePicker.session}
+        currentPrice={pricePicker.currentPrice}
+        currentStatus={pricePicker.currentStatus}
+        currentDietType={pricePicker.currentDietType}
+        dateStr={pricePicker.formattedDateStr}
+        onClose={() => setPricePicker((prev) => ({ ...prev, isOpen: false }))}
+        onConfirmDelivery={handleConfirmDelivery}
+        onMarkLeave={handleMarkLeave}
+        onClearMark={handleClearMark}
+      />
+
+      {/* Customer Add / Edit Bottom Sheet Modal */}
+      <CustomerModal
+        isOpen={customerModalOpen}
+        customerToEdit={customerToEdit}
+        onClose={() => {
+          setCustomerModalOpen(false);
+          setCustomerToEdit(null);
+        }}
+        onSaveCustomer={handleSaveCustomer}
+        onDeleteCustomer={handleDeleteCustomer}
+      />
+
+      {/* Advance Payment Bottom Sheet Modal */}
+      <AdvancePaymentModal
+        isOpen={advanceModalOpen}
+        customer={activeCustomerForReports}
+        dueAmount={invoiceMetrics.dueAmount}
+        paymentToEdit={paymentToEdit}
+        onClose={() => {
+          setAdvanceModalOpen(false);
+          setPaymentToEdit(null);
+        }}
+        onSavePayment={handleSavePayment}
+        onDeletePayment={handleDeletePayment}
+      />
+
+      {/* Delightful Toast Banner */}
+      {toastMessage && (
+        <div className="fixed top-20 inset-x-4 z-50 flex items-center justify-center pointer-events-none transition-all duration-300">
+          <div className="bg-[#213145] text-[#eaf1ff] px-4 py-2 rounded-full shadow-xl flex items-center gap-2 font-label-md text-[13px] border border-white/10">
+            <span className="material-symbols-outlined text-[#7cf994] text-[18px]">verified</span>
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Offline Status Alert */}
+      <OfflineIndicator />
+    </div>
+  );
+}
