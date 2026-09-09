@@ -8,6 +8,8 @@ import {
   getDocs,
   deleteDoc,
   writeBatch,
+  onSnapshot,
+  type Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { Customer, DayDelivery, PaymentRecord } from './types';
@@ -51,10 +53,13 @@ export function handleFirestoreError(
   console.error('Firestore Error: ', JSON.stringify(errInfo));
 }
 
-// Test Connection on startup as required by skill
+// Test Connection on startup. Reads a sentinel doc under the "customers"
+// collection because that's the only path the security rules actually allow
+// (see firestore.rules) - a "test/connection" path would be denied by rules
+// and wrongly report the app as offline even when the real data is reachable.
 export async function testFirestoreConnection(): Promise<boolean> {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await getDocFromServer(doc(db, CUSTOMERS_COLLECTION, 'connection-test-sentinel'));
     console.log('Firebase connection verified');
     return true;
   } catch (error) {
@@ -109,6 +114,21 @@ export async function fetchCustomersFromFirestore(): Promise<Customer[]> {
   }
 }
 
+// Live subscription: fires immediately with current data, then again on every
+// change from any device (this, or another install like a family member's).
+export function subscribeToCustomers(onData: (customers: Customer[]) => void): Unsubscribe {
+  const colRef = collection(db, CUSTOMERS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snap) => {
+      const list: Customer[] = [];
+      snap.forEach((d) => list.push(d.data() as Customer));
+      onData(list);
+    },
+    (err) => handleFirestoreError(err, OperationType.LIST, CUSTOMERS_COLLECTION)
+  );
+}
+
 // Daily Deliveries
 export async function saveDeliveryToFirestore(customerId: string, delivery: DayDelivery): Promise<void> {
   try {
@@ -141,6 +161,28 @@ export async function fetchDeliveriesFromFirestore(): Promise<Record<string, Day
     handleFirestoreError(err, OperationType.LIST, DELIVERIES_COLLECTION);
     return {};
   }
+}
+
+export function subscribeToDeliveries(
+  onData: (deliveries: Record<string, DayDelivery>) => void
+): Unsubscribe {
+  const colRef = collection(db, DELIVERIES_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snap) => {
+      const result: Record<string, DayDelivery> = {};
+      snap.forEach((d) => {
+        const data = d.data() as DayDelivery;
+        const key = `${data.dateKey || '2026-09-09'}_${data.customerId}`;
+        result[key] = data;
+        if (!result[data.customerId]) {
+          result[data.customerId] = data;
+        }
+      });
+      onData(result);
+    },
+    (err) => handleFirestoreError(err, OperationType.LIST, DELIVERIES_COLLECTION)
+  );
 }
 
 // Payments
@@ -178,6 +220,19 @@ export async function fetchPaymentsFromFirestore(): Promise<PaymentRecord[]> {
     handleFirestoreError(err, OperationType.LIST, PAYMENTS_COLLECTION);
     return [];
   }
+}
+
+export function subscribeToPayments(onData: (payments: PaymentRecord[]) => void): Unsubscribe {
+  const colRef = collection(db, PAYMENTS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snap) => {
+      const list: PaymentRecord[] = [];
+      snap.forEach((d) => list.push(d.data() as PaymentRecord));
+      onData(list);
+    },
+    (err) => handleFirestoreError(err, OperationType.LIST, PAYMENTS_COLLECTION)
+  );
 }
 
 // Clear all Firestore data

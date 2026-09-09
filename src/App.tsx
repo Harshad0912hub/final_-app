@@ -30,12 +30,12 @@ import {
 } from './data/initialData';
 import {
   testFirestoreConnection,
-  fetchCustomersFromFirestore,
+  subscribeToCustomers,
   saveCustomerToFirestore,
   deleteCustomerFromFirestore,
-  fetchDeliveriesFromFirestore,
+  subscribeToDeliveries,
   saveDeliveryToFirestore,
-  fetchPaymentsFromFirestore,
+  subscribeToPayments,
   savePaymentToFirestore,
   deletePaymentFromFirestore,
   clearFirestoreData,
@@ -95,10 +95,17 @@ export default function App() {
     return '';
   });
 
-  // Load from Firebase Firestore on Mount
+  // Live-sync with Firebase Firestore: subscriptions fire immediately with
+  // current cloud data, then again whenever any device (this one, or a
+  // family member's install) writes a change - so every device stays in sync
+  // without needing a manual refresh.
   useEffect(() => {
     let isMounted = true;
-    async function loadCloudData() {
+    let unsubCustomers: (() => void) | undefined;
+    let unsubDeliveries: (() => void) | undefined;
+    let unsubPayments: (() => void) | undefined;
+
+    async function connectCloudSync() {
       setIsLoadingCloud(true);
       try {
         const isConnected = await testFirestoreConnection();
@@ -106,15 +113,8 @@ export default function App() {
         setIsCloudConnected(isConnected);
 
         if (isConnected) {
-          const [remoteCusts, remoteDeliveries, remotePayments] = await Promise.all([
-            fetchCustomersFromFirestore(),
-            fetchDeliveriesFromFirestore(),
-            fetchPaymentsFromFirestore(),
-          ]);
-
-          if (!isMounted) return;
-
-          if (remoteCusts && remoteCusts.length > 0) {
+          unsubCustomers = subscribeToCustomers((remoteCusts) => {
+            if (!isMounted) return;
             const cleanCusts = remoteCusts.filter(
               (c) =>
                 !['cust-1', 'cust-2', 'cust-3', 'cust-4', 'cust-5', 'cust-6', 'cust-7'].includes(c.id) &&
@@ -122,33 +122,36 @@ export default function App() {
                 c.name !== 'राहुल जोशी'
             );
             setCustomers(cleanCusts);
-            if (cleanCusts.length > 0) {
-              if (!selectedCustomerId || !cleanCusts.some((c) => c.id === selectedCustomerId)) {
-                setSelectedCustomerId(cleanCusts[0].id);
-              }
-            } else {
-              setSelectedCustomerId('');
-            }
-          }
+            setSelectedCustomerId((prev) => {
+              if (cleanCusts.length === 0) return '';
+              if (prev && cleanCusts.some((c) => c.id === prev)) return prev;
+              return cleanCusts[0].id;
+            });
+          });
 
-          if (remoteDeliveries && Object.keys(remoteDeliveries).length > 0) {
+          unsubDeliveries = subscribeToDeliveries((remoteDeliveries) => {
+            if (!isMounted) return;
             setDayDeliveries(remoteDeliveries);
-          }
+          });
 
-          if (remotePayments && remotePayments.length > 0) {
+          unsubPayments = subscribeToPayments((remotePayments) => {
+            if (!isMounted) return;
             setPayments(remotePayments);
-          }
+          });
         }
       } catch (e) {
-        console.warn('Firebase initial load skipped or offline:', e);
+        console.warn('Firebase live sync skipped or offline:', e);
       } finally {
         if (isMounted) setIsLoadingCloud(false);
       }
     }
 
-    loadCloudData();
+    connectCloudSync();
     return () => {
       isMounted = false;
+      unsubCustomers?.();
+      unsubDeliveries?.();
+      unsubPayments?.();
     };
   }, []);
 
