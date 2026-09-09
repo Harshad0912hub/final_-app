@@ -371,20 +371,30 @@ export default function App() {
     );
   };
 
-  // Handler: Batch mark all pending customers for a session as delivered
+  // Handler: Batch mark all pending customers for a session as delivered,
+  // or (when none are pending) undo and revert all delivered ones back to pending
   const handleBatchMarkSession = (session: 'morning' | 'evening', dateKey: string) => {
     const activeDateKey = dateKey || '2026-09-09';
     const activeCustomers = customers.filter((c) => c.status === 'active');
     const updates: Record<string, DayDelivery> = {};
     let count = 0;
 
-    activeCustomers.forEach((cust) => {
-      const sessionApplicable =
-        session === 'morning'
-          ? cust.mealTiming === 'both' || cust.mealTiming === 'morning'
-          : cust.mealTiming === 'both' || cust.mealTiming === 'night';
-      if (!sessionApplicable) return;
+    const applicableCustomers = activeCustomers.filter((cust) =>
+      session === 'morning'
+        ? cust.mealTiming === 'both' || cust.mealTiming === 'morning'
+        : cust.mealTiming === 'both' || cust.mealTiming === 'night'
+    );
 
+    const hasPending = applicableCustomers.some((cust) => {
+      const existing =
+        dayDeliveries[`${activeDateKey}_${cust.id}`] ||
+        (activeDateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+      const status = session === 'morning' ? existing?.morning?.status : existing?.evening?.status;
+      return (status || 'pending') === 'pending';
+    });
+    const targetStatus: 'delivered' | 'pending' = hasPending ? 'delivered' : 'pending';
+
+    applicableCustomers.forEach((cust) => {
       const existing =
         dayDeliveries[`${activeDateKey}_${cust.id}`] ||
         (activeDateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined) || {
@@ -395,14 +405,16 @@ export default function App() {
         };
 
       const sessionStatus = session === 'morning' ? existing.morning?.status : existing.evening?.status;
-      if (sessionStatus !== 'pending') return;
+      const currentStatus = sessionStatus || 'pending';
+      if (targetStatus === 'delivered' && currentStatus !== 'pending') return;
+      if (targetStatus === 'pending' && currentStatus !== 'delivered') return;
 
       const updated: DayDelivery = {
         ...existing,
         dateKey: activeDateKey,
         customerId: cust.id,
         [session]: {
-          status: 'delivered',
+          status: targetStatus,
           price: cust.ratePerTiffin,
           dietType: cust.dietType || 'veg',
         },
@@ -420,7 +432,11 @@ export default function App() {
     if (count > 0) {
       setDayDeliveries((prev) => ({ ...prev, ...updates }));
       const sessionLabel = session === 'morning' ? 'सकाळचे' : 'रात्रीचे';
-      triggerToast(`${sessionLabel} ${count} ग्राहकांचे डबे नोंदवले! ✅`);
+      triggerToast(
+        targetStatus === 'delivered'
+          ? `${sessionLabel} ${count} ग्राहकांचे डबे नोंदवले! ✅`
+          : `${sessionLabel} ${count} ग्राहकांचे डबे पूर्ववत केले! ↩️`
+      );
     }
   };
 

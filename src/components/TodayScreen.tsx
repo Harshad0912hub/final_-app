@@ -160,6 +160,16 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
     const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
     return (rec?.evening?.status || 'pending') === 'pending';
   });
+  const deliveredMorningCustomers = activeCustomers.filter((cust) => {
+    if (cust.mealTiming !== 'both' && cust.mealTiming !== 'morning') return false;
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    return rec?.morning?.status === 'delivered';
+  });
+  const deliveredEveningCustomers = activeCustomers.filter((cust) => {
+    if (cust.mealTiming !== 'both' && cust.mealTiming !== 'night') return false;
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    return rec?.evening?.status === 'delivered';
+  });
 
   const plannedCount = plannedMorning + plannedEvening;
   const deliveredTotalTiffins = morningDelivered + eveningDelivered;
@@ -369,29 +379,45 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              disabled={pendingMorningCustomers.length === 0}
+              disabled={pendingMorningCustomers.length === 0 && deliveredMorningCustomers.length === 0}
               onClick={() => onBatchMarkSession?.('morning', dateKey)}
               className={`h-11 rounded-xl flex items-center justify-center gap-1.5 font-label-md text-[12px] font-bold shadow-sm active:scale-95 transition-all ${
                 pendingMorningCustomers.length > 0
                   ? 'bg-[#006e2d] text-white hover:bg-[#007230]'
+                  : deliveredMorningCustomers.length > 0
+                  ? 'bg-white text-[#006e2d] border-2 border-[#006e2d] hover:bg-[#e8f5e9]'
                   : 'bg-[#e8f5e9] text-[#a5d6a7] cursor-not-allowed'
               }`}
             >
-              <span className="material-symbols-outlined text-[17px]">done_all</span>
-              <span>{language === 'mr' ? `सकाळचे सर्व दिले (${pendingMorningCustomers.length})` : `All Morning Done (${pendingMorningCustomers.length})`}</span>
+              <span className="material-symbols-outlined text-[17px]">
+                {pendingMorningCustomers.length > 0 ? 'done_all' : 'undo'}
+              </span>
+              <span>
+                {pendingMorningCustomers.length > 0
+                  ? (language === 'mr' ? `सकाळचे सर्व दिले (${pendingMorningCustomers.length})` : `All Morning Done (${pendingMorningCustomers.length})`)
+                  : (language === 'mr' ? `सकाळचे पूर्ववत करा (${deliveredMorningCustomers.length})` : `Undo Morning (${deliveredMorningCustomers.length})`)}
+              </span>
             </button>
             <button
               type="button"
-              disabled={pendingEveningCustomers.length === 0}
+              disabled={pendingEveningCustomers.length === 0 && deliveredEveningCustomers.length === 0}
               onClick={() => onBatchMarkSession?.('evening', dateKey)}
               className={`h-11 rounded-xl flex items-center justify-center gap-1.5 font-label-md text-[12px] font-bold shadow-sm active:scale-95 transition-all ${
                 pendingEveningCustomers.length > 0
                   ? 'bg-[#5c3317] text-white hover:bg-[#4a2a12]'
+                  : deliveredEveningCustomers.length > 0
+                  ? 'bg-white text-[#5c3317] border-2 border-[#5c3317] hover:bg-[#fbe9e7]'
                   : 'bg-[#fbe9e7] text-[#ffccbc] cursor-not-allowed'
               }`}
             >
-              <span className="material-symbols-outlined text-[17px]">done_all</span>
-              <span>{language === 'mr' ? `रात्रीचे सर्व दिले (${pendingEveningCustomers.length})` : `All Evening Done (${pendingEveningCustomers.length})`}</span>
+              <span className="material-symbols-outlined text-[17px]">
+                {pendingEveningCustomers.length > 0 ? 'done_all' : 'undo'}
+              </span>
+              <span>
+                {pendingEveningCustomers.length > 0
+                  ? (language === 'mr' ? `रात्रीचे सर्व दिले (${pendingEveningCustomers.length})` : `All Evening Done (${pendingEveningCustomers.length})`)
+                  : (language === 'mr' ? `रात्रीचे पूर्ववत करा (${deliveredEveningCustomers.length})` : `Undo Evening (${deliveredEveningCustomers.length})`)}
+              </span>
             </button>
           </div>
         </section>
