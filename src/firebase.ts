@@ -152,8 +152,11 @@ export async function fetchDeliveriesFromFirestore(): Promise<Record<string, Day
       const data = d.data() as DayDelivery;
       const key = `${data.dateKey || getTodayDateKey()}_${data.customerId}`;
       result[key] = data;
-      // also keep by customerId if legacy or today
-      if (!result[data.customerId]) {
+      // Also keep a bare customerId-keyed mirror, but only for a record that
+      // actually IS today's - otherwise a customer with several days of
+      // history (e.g. a multi-day leave range) would have some other day's
+      // record wrongly picked up as "today" by consumers using this fallback.
+      if (data.dateKey === getTodayDateKey()) {
         result[data.customerId] = data;
       }
     });
@@ -176,7 +179,9 @@ export function subscribeToDeliveries(
         const data = d.data() as DayDelivery;
         const key = `${data.dateKey || getTodayDateKey()}_${data.customerId}`;
         result[key] = data;
-        if (!result[data.customerId]) {
+        // See comment in fetchDeliveriesFromFirestore - only mirror a record
+        // that actually IS today's, not whichever one is enumerated first.
+        if (data.dateKey === getTodayDateKey()) {
           result[data.customerId] = data;
         }
       });

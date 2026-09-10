@@ -602,18 +602,34 @@ export default function App() {
 
   // Handler: Mark one customer's pending tiffins (both sessions, whichever
   // applies) as "leave" across every day in a date range - e.g. a vacation.
-  // Already-recorded deliveries in that range are left untouched.
-  const handleMarkLeaveRange = (customerId: string, fromDateKey: string, toDateKey: string) => {
+  // If `previousFromDateKey`/`previousToDateKey` are given (editing an
+  // existing leave period), any day that was in the old range but is no
+  // longer in the new one is reverted back to pending in the same pass, so
+  // shrinking/moving a leave period behaves correctly. Already-recorded
+  // deliveries are never touched either way.
+  const handleMarkLeaveRange = (
+    customerId: string,
+    fromDateKey: string,
+    toDateKey: string,
+    previousFromDateKey?: string,
+    previousToDateKey?: string
+  ) => {
     const cust = customers.find((c) => c.id === customerId);
     if (!cust) return;
 
     const morningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
     const eveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
-    const dateKeys = getDateKeyRange(fromDateKey, toDateKey);
-    const updates: Record<string, DayDelivery> = {};
-    let count = 0;
+    const newKeys = new Set(getDateKeyRange(fromDateKey, toDateKey));
+    const oldKeys =
+      previousFromDateKey && previousToDateKey ? getDateKeyRange(previousFromDateKey, previousToDateKey) : [];
+    const allKeys = new Set([...newKeys, ...oldKeys]);
 
-    dateKeys.forEach((activeDateKey) => {
+    const updates: Record<string, DayDelivery> = {};
+    let leaveCount = 0;
+    let clearedCount = 0;
+
+    allKeys.forEach((activeDateKey) => {
+      const isInNewRange = newKeys.has(activeDateKey);
       const existing =
         dayDeliveries[`${activeDateKey}_${cust.id}`] ||
         (activeDateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined) || {
@@ -626,28 +642,40 @@ export default function App() {
       const updated: DayDelivery = { ...existing, dateKey: activeDateKey, customerId: cust.id };
       let touched = false;
 
-      if (morningApplicable && (existing.morning?.status || 'pending') === 'pending') {
-        updated.morning = {
-          status: 'leave',
-          price: existing.morning?.price ?? cust.ratePerTiffin,
-          dietType: existing.morning?.dietType || cust.dietType || 'veg',
-        };
-        touched = true;
-      }
-      if (eveningApplicable && (existing.evening?.status || 'pending') === 'pending') {
-        updated.evening = {
-          status: 'leave',
-          price: existing.evening?.price ?? cust.ratePerTiffin,
-          dietType: existing.evening?.dietType || cust.dietType || 'veg',
-        };
-        touched = true;
+      if (isInNewRange) {
+        if (morningApplicable && (existing.morning?.status || 'pending') === 'pending') {
+          updated.morning = {
+            status: 'leave',
+            price: existing.morning?.price ?? cust.ratePerTiffin,
+            dietType: existing.morning?.dietType || cust.dietType || 'veg',
+          };
+          touched = true;
+        }
+        if (eveningApplicable && (existing.evening?.status || 'pending') === 'pending') {
+          updated.evening = {
+            status: 'leave',
+            price: existing.evening?.price ?? cust.ratePerTiffin,
+            dietType: existing.evening?.dietType || cust.dietType || 'veg',
+          };
+          touched = true;
+        }
+        if (touched) leaveCount++;
+      } else {
+        if (morningApplicable && existing.morning?.status === 'leave') {
+          updated.morning = { ...existing.morning, status: 'pending' };
+          touched = true;
+        }
+        if (eveningApplicable && existing.evening?.status === 'leave') {
+          updated.evening = { ...existing.evening, status: 'pending' };
+          touched = true;
+        }
+        if (touched) clearedCount++;
       }
 
       if (!touched) return;
 
       updates[`${activeDateKey}_${cust.id}`] = updated;
       if (activeDateKey === getTodayDateKey()) updates[cust.id] = updated;
-      count++;
 
       saveDeliveryToFirestore(cust.id, updated).catch((err) =>
         console.warn('Leave-range save to cloud skipped:', err)
@@ -658,10 +686,57 @@ export default function App() {
       setDayDeliveries((prev) => ({ ...prev, ...updates }));
     }
     triggerToast(
-      count > 0
-        ? `${cust.name}: ${dateKeys.length} दिवसांपैकी ${count} दिवस सुट्टी नोंदवली! ✈️`
+      leaveCount > 0
+        ? `${cust.name}: ${newKeys.size} दिवसांपैकी ${leaveCount} दिवस सुट्टी नोंदवली! ✈️`
+        : clearedCount > 0
+        ? `${cust.name}: सुट्टी अद्ययावत केली.`
         : `${cust.name}: निवडलेल्या कालावधीत नोंदवण्यासारखे काही नाही.`
     );
+  };
+
+  // Handler: Cancel a previously set leave period, reverting any 'leave' day
+  // in the range back to pending. Delivered days are left untouched.
+  const handleClearLeaveRange = (customerId: string, fromDateKey: string, toDateKey: string) => {
+    const cust = customers.find((c) => c.id === customerId);
+    if (!cust) return;
+
+    const dateKeys = getDateKeyRange(fromDateKey, toDateKey);
+    const updates: Record<string, DayDelivery> = {};
+    let count = 0;
+
+    dateKeys.forEach((activeDateKey) => {
+      const existing =
+        dayDeliveries[`${activeDateKey}_${cust.id}`] ||
+        (activeDateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
+      if (!existing) return;
+
+      const updated: DayDelivery = { ...existing, dateKey: activeDateKey, customerId: cust.id };
+      let touched = false;
+
+      if (existing.morning?.status === 'leave') {
+        updated.morning = { ...existing.morning, status: 'pending' };
+        touched = true;
+      }
+      if (existing.evening?.status === 'leave') {
+        updated.evening = { ...existing.evening, status: 'pending' };
+        touched = true;
+      }
+
+      if (!touched) return;
+
+      updates[`${activeDateKey}_${cust.id}`] = updated;
+      if (activeDateKey === getTodayDateKey()) updates[cust.id] = updated;
+      count++;
+
+      saveDeliveryToFirestore(cust.id, updated).catch((err) =>
+        console.warn('Leave-clear save to cloud skipped:', err)
+      );
+    });
+
+    if (Object.keys(updates).length > 0) {
+      setDayDeliveries((prev) => ({ ...prev, ...updates }));
+    }
+    triggerToast(`${cust.name}: सुट्टी रद्द केली.`);
   };
 
   // Handler: Save or Update Customer
@@ -878,6 +953,7 @@ export default function App() {
         ) : activeTab === 'customers' ? (
           <CustomersScreen
             customers={customers}
+            dayDeliveries={dayDeliveries}
             onOpenAddModal={() => {
               setCustomerToEdit(null);
               setCustomerModalOpen(true);
@@ -889,6 +965,7 @@ export default function App() {
             onToggleCustomerStatus={handleToggleCustomerStatus}
             onDeleteCustomer={handleDeleteCustomer}
             onMarkLeaveRange={handleMarkLeaveRange}
+            onClearLeaveRange={handleClearLeaveRange}
           />
         ) : (
           <ReportsScreen

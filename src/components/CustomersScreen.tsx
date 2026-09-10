@@ -1,34 +1,63 @@
 import React, { useState } from 'react';
-import { Customer } from '../types';
+import { Customer, DayDelivery } from '../types';
 import { useLanguage } from '../utils/LanguageContext';
+import { findUpcomingLeaveRange } from '../utils/dateUtils';
 
 interface CustomersScreenProps {
   customers: Customer[];
+  dayDeliveries: Record<string, DayDelivery>;
   onOpenAddModal: () => void;
   onOpenEditModal: (customer: Customer) => void;
   onToggleCustomerStatus: (customerId: string, status: 'active' | 'inactive') => void;
   onDeleteCustomer?: (customerId: string) => void;
-  onMarkLeaveRange?: (customerId: string, fromDateKey: string, toDateKey: string) => void;
+  onMarkLeaveRange?: (
+    customerId: string,
+    fromDateKey: string,
+    toDateKey: string,
+    previousFromDateKey?: string,
+    previousToDateKey?: string
+  ) => void;
+  onClearLeaveRange?: (customerId: string, fromDateKey: string, toDateKey: string) => void;
 }
 
 export const CustomersScreen: React.FC<CustomersScreenProps> = ({
   customers,
+  dayDeliveries,
   onOpenAddModal,
   onOpenEditModal,
   onToggleCustomerStatus,
   onDeleteCustomer,
   onMarkLeaveRange,
+  onClearLeaveRange,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'inactive' | 'leave'>('all');
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [customerForLeave, setCustomerForLeave] = useState<Customer | null>(null);
+  const [existingLeaveRange, setExistingLeaveRange] = useState<{ from: string; to: string } | null>(null);
   const [leaveFrom, setLeaveFrom] = useState('');
   const [leaveTo, setLeaveTo] = useState('');
   const { language, t, formatNum } = useLanguage();
 
   const activeCustomers = customers.filter((c) => c.status === 'active');
   const inactiveCustomers = customers.filter((c) => c.status === 'inactive');
+
+  const leaveRangeByCustomerId: Record<string, { from: string; to: string } | null> = {};
+  activeCustomers.forEach((c) => {
+    leaveRangeByCustomerId[c.id] = findUpcomingLeaveRange(c.id, dayDeliveries, c.mealTiming);
+  });
+  const onLeaveCustomers = activeCustomers.filter((c) => leaveRangeByCustomerId[c.id]);
+
+  const formatLeaveBadge = (from: string, to: string): string => {
+    const fmt = (key: string) => {
+      const [, m, d] = key.split('-');
+      const monthNamesMr = ['जाने', 'फेब्रु', 'मार्च', 'एप्रि', 'मे', 'जून', 'जुलै', 'ऑग', 'सप्टें', 'ऑक्टो', 'नोव्हें', 'डिसें'];
+      const monthNamesEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = language === 'mr' ? monthNamesMr : monthNamesEn;
+      return `${Number(d)} ${months[Number(m) - 1]}`;
+    };
+    return from === to ? fmt(from) : `${fmt(from)} - ${fmt(to)}`;
+  };
 
   const filteredActive = activeCustomers.filter(
     (c) =>
@@ -44,11 +73,20 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
       c.address.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const filteredOnLeave = onLeaveCustomers.filter(
+    (c) =>
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.phone.includes(searchQuery) ||
+      c.address.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const hasAnyMatches =
     filter === 'all'
       ? filteredActive.length > 0 || filteredInactive.length > 0
       : filter === 'active'
       ? filteredActive.length > 0
+      : filter === 'leave'
+      ? filteredOnLeave.length > 0
       : filteredInactive.length > 0;
 
   return (
@@ -164,6 +202,21 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
             <span className="w-2 h-2 rounded-full bg-[#8e7166]"></span>
             <span>{t('inactiveCustomers')} ({formatNum(inactiveCustomers.length)})</span>
           </button>
+
+          {onLeaveCustomers.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilter('leave')}
+              className={`flex items-center gap-1 h-9 px-4 rounded-full font-label-md text-[12px] shrink-0 transition-all ${
+                filter === 'leave'
+                  ? 'bg-[#8d4b00] text-white font-bold shadow-sm'
+                  : 'bg-[#ffffff] text-[#8d4b00] border border-[#ffdcc3]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">flight_takeoff</span>
+              <span>{language === 'mr' ? 'सुट्टीवर' : 'On Leave'} ({formatNum(onLeaveCustomers.length)})</span>
+            </button>
+          )}
         </div>
       </section>
 
@@ -245,6 +298,28 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                             ? (language === 'mr' ? 'मांसाहारी' : 'Non-Veg')
                             : (language === 'mr' ? 'शाकाहारी' : 'Veg')}
                         </span>
+                        {leaveRangeByCustomerId[cust.id] && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const range = leaveRangeByCustomerId[cust.id];
+                              setExistingLeaveRange(range);
+                              setLeaveFrom(range?.from || '');
+                              setLeaveTo(range?.to || '');
+                              setCustomerForLeave(cust);
+                            }}
+                            className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#ffdcc3] text-[#6e3900] hover:bg-[#ffcda3] active:scale-95 transition-all"
+                          >
+                            <span className="material-symbols-outlined text-[11px]">flight_takeoff</span>
+                            <span>
+                              {language === 'mr' ? 'सुट्टी: ' : 'Leave: '}
+                              {formatLeaveBadge(
+                                leaveRangeByCustomerId[cust.id]!.from,
+                                leaveRangeByCustomerId[cust.id]!.to
+                              )}
+                            </span>
+                          </button>
+                        )}
                       </div>
                       <a
                         href={`tel:${cust.phone}`}
@@ -276,12 +351,22 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                         type="button"
                         aria-label="Mark leave for a period"
                         onClick={() => {
-                          setLeaveFrom('');
-                          setLeaveTo('');
+                          const range = leaveRangeByCustomerId[cust.id];
+                          setExistingLeaveRange(range);
+                          setLeaveFrom(range?.from || '');
+                          setLeaveTo(range?.to || '');
                           setCustomerForLeave(cust);
                         }}
-                        className="w-9 h-9 rounded-full bg-[#eff4ff] flex items-center justify-center text-[#8d4b00] active:scale-90 hover:bg-[#ffdcc3] transition-transform"
-                        title={language === 'mr' ? 'सुट्टी कालावधी' : 'Mark Leave Period'}
+                        className={`w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-transform ${
+                          leaveRangeByCustomerId[cust.id]
+                            ? 'bg-[#ffdcc3] text-[#6e3900] hover:bg-[#ffcda3]'
+                            : 'bg-[#eff4ff] text-[#8d4b00] hover:bg-[#ffdcc3]'
+                        }`}
+                        title={
+                          leaveRangeByCustomerId[cust.id]
+                            ? (language === 'mr' ? 'सुट्टी संपादित करा' : 'Edit Leave Period')
+                            : (language === 'mr' ? 'सुट्टी कालावधी' : 'Mark Leave Period')
+                        }
                       >
                         <span className="material-symbols-outlined text-[18px]">flight_takeoff</span>
                       </button>
@@ -329,6 +414,61 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                 </div>
               </article>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* On Leave Section (dedicated filter view) */}
+      {filter === 'leave' && filteredOnLeave.length > 0 && (
+        <section className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="font-headline-sm text-[16px] text-[#0b1c30] font-bold flex items-center gap-1.5">
+              <span>{language === 'mr' ? 'सुट्टीवरील ग्राहक' : 'Customers On Leave'}</span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#ffdcc3] text-[#6e3900] font-bold">
+                {formatNum(filteredOnLeave.length)}
+              </span>
+            </h3>
+          </div>
+
+          <div className="space-y-2.5">
+            {filteredOnLeave.map((cust) => {
+              const range = leaveRangeByCustomerId[cust.id]!;
+              return (
+                <article
+                  key={cust.id}
+                  className="bg-[#fff8f0] rounded-2xl p-3.5 shadow-sm border border-[#ffdcc3] flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className={`w-11 h-11 rounded-full font-headline-sm text-[18px] flex items-center justify-center shrink-0 font-bold ${cust.avatarBg}`}
+                    >
+                      {cust.initial}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-headline-sm text-[15px] text-[#0b1c30] font-bold truncate">
+                        {cust.name}
+                      </h4>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#6e3900] mt-0.5">
+                        <span className="material-symbols-outlined text-[13px]">flight_takeoff</span>
+                        {formatLeaveBadge(range.from, range.to)}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExistingLeaveRange(range);
+                      setLeaveFrom(range.from);
+                      setLeaveTo(range.to);
+                      setCustomerForLeave(cust);
+                    }}
+                    className="h-9 px-3 rounded-full bg-[#ffdcc3] text-[#6e3900] font-label-sm text-[12px] font-bold hover:bg-[#ffcda3] active:scale-95 transition-all shrink-0"
+                  >
+                    {language === 'mr' ? 'संपादन' : 'Edit'}
+                  </button>
+                </article>
+              );
+            })}
           </div>
         </section>
       )}
@@ -490,7 +630,9 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
             </div>
             <div>
               <h4 className="font-headline-sm text-[18px] text-[#0b1c30] font-bold">
-                {language === 'mr' ? 'सुट्टीचा कालावधी निवडा' : 'Pick Leave Period'}
+                {existingLeaveRange
+                  ? (language === 'mr' ? 'सुट्टीचा कालावधी संपादित करा' : 'Edit Leave Period')
+                  : (language === 'mr' ? 'सुट्टीचा कालावधी निवडा' : 'Pick Leave Period')}
               </h4>
               <p className="font-body-sm text-[13px] text-[#5a4138] mt-1.5 leading-relaxed">
                 <strong className="text-[#0b1c30] font-semibold">{customerForLeave.name}</strong>
@@ -526,7 +668,10 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
             <div className="flex gap-2 w-full pt-1">
               <button
                 type="button"
-                onClick={() => setCustomerForLeave(null)}
+                onClick={() => {
+                  setCustomerForLeave(null);
+                  setExistingLeaveRange(null);
+                }}
                 className="flex-1 h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-lg text-[14px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
               >
                 {t('cancel')}
@@ -536,16 +681,41 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                 disabled={!leaveFrom || !leaveTo}
                 onClick={() => {
                   if (onMarkLeaveRange && leaveFrom && leaveTo) {
-                    onMarkLeaveRange(customerForLeave.id, leaveFrom, leaveTo);
+                    onMarkLeaveRange(
+                      customerForLeave.id,
+                      leaveFrom,
+                      leaveTo,
+                      existingLeaveRange?.from,
+                      existingLeaveRange?.to
+                    );
                   }
                   setCustomerForLeave(null);
+                  setExistingLeaveRange(null);
                 }}
                 className="flex-1 h-11 rounded-full bg-[#8d4b00] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#6e3900] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-[18px]">event_busy</span>
-                <span>{language === 'mr' ? 'सुट्टी नोंदवा' : 'Mark Leave'}</span>
+                <span>
+                  {existingLeaveRange
+                    ? (language === 'mr' ? 'अद्ययावत करा' : 'Update')
+                    : (language === 'mr' ? 'सुट्टी नोंदवा' : 'Mark Leave')}
+                </span>
               </button>
             </div>
+            {existingLeaveRange && onClearLeaveRange && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClearLeaveRange(customerForLeave.id, existingLeaveRange.from, existingLeaveRange.to);
+                  setCustomerForLeave(null);
+                  setExistingLeaveRange(null);
+                }}
+                className="w-full h-10 rounded-full bg-[#ffdad6]/60 text-[#ba1a1a] font-label-md text-[13px] font-semibold hover:bg-[#ffdad6] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">cancel</span>
+                <span>{language === 'mr' ? 'सुट्टी पूर्णपणे रद्द करा' : 'Cancel Leave Entirely'}</span>
+              </button>
+            )}
           </div>
         </div>
       )}
