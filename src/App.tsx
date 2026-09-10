@@ -1362,8 +1362,9 @@ export default function App() {
         unbilledCount={unbilledCustomerCount}
         pendingDuesEnabled={pendingDuesEnabled}
         overdueCustomers={overdueCustomers}
-        onGoToReports={() => {
+        onGoToReports={(customerId) => {
           setShowNotifications(false);
+          if (customerId) setSelectedCustomerId(customerId);
           setActiveTab('reports');
         }}
       />

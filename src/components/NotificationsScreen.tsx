@@ -14,7 +14,7 @@ interface NotificationsScreenProps {
   unbilledCount: number;
   pendingDuesEnabled: boolean;
   overdueCustomers: OverdueCustomer[];
-  onGoToReports: () => void;
+  onGoToReports: (customerId?: string) => void;
 }
 
 export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
@@ -88,7 +88,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
               </div>
               <button
                 type="button"
-                onClick={onGoToReports}
+                onClick={() => onGoToReports()}
                 className="w-full h-9 rounded-full bg-[#a33900] hover:bg-[#852f00] text-white text-[12px] font-bold active:scale-95 transition-all shadow-xs flex items-center justify-center gap-1"
               >
                 <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
@@ -117,24 +117,20 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
 
               <div className="flex flex-col gap-1 mt-0.5">
                 {overdueCustomers.map((c) => (
-                  <div
+                  <button
                     key={c.id}
-                    className="flex items-center justify-between bg-[#fff3f0] rounded-xl px-2.5 py-1.5"
+                    type="button"
+                    onClick={() => onGoToReports(c.id)}
+                    className="flex items-center justify-between bg-[#fff3f0] hover:bg-[#ffe4de] rounded-xl px-2.5 py-1.5 active:scale-[0.98] transition-all text-left"
                   >
                     <span className="text-[12.5px] font-semibold text-[#0b1c30] truncate">{c.name}</span>
-                    <span className="text-[12.5px] font-bold text-[#ba1a1a]">{formatCurrency(c.due)}</span>
-                  </div>
+                    <span className="flex items-center gap-1 shrink-0">
+                      <span className="text-[12.5px] font-bold text-[#ba1a1a]">{formatCurrency(c.due)}</span>
+                      <span className="material-symbols-outlined text-[15px] text-[#ba1a1a]">chevron_right</span>
+                    </span>
+                  </button>
                 ))}
               </div>
-
-              <button
-                type="button"
-                onClick={onGoToReports}
-                className="w-full h-9 rounded-full bg-[#ba1a1a] hover:bg-[#93000a] text-white text-[12px] font-bold active:scale-95 transition-all shadow-xs flex items-center justify-center gap-1"
-              >
-                <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
-                <span>{language === 'mr' ? 'अहवालात बघा' : 'View in Reports'}</span>
-              </button>
             </div>
           )}
         </div>
