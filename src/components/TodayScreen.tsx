@@ -25,12 +25,45 @@ function buildHolidayBroadcastMsg(
 }
 
 // Helper: build per-customer WhatsApp delivery message
-function buildWhatsAppMsg(custName: string, session: 'morning' | 'evening', dateFull: string, price: number, language: string): string {
-  const sessionLabel = language === 'mr' ? (session === 'morning' ? 'सकाळचा' : 'रात्रीचा') : (session === 'morning' ? 'Morning' : 'Evening');
-  if (language === 'mr') {
-    return `नमस्कार ${custName}जी! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${dateFull} - ${sessionLabel} डबा दिला गेला.\nरक्कम: ₹${price}\n\nधन्यवाद! 😊`;
+// Builds a delivery-confirmation WhatsApp message covering whichever
+// session(s) were actually delivered that day - both together (with a
+// total) when both morning and evening are done, not just one.
+function buildWhatsAppMsg(
+  custName: string,
+  deliveredSessions: { session: 'morning' | 'evening'; price: number; label?: string }[],
+  dateFull: string,
+  language: string
+): string {
+  const sessionName = (s: 'morning' | 'evening') =>
+    language === 'mr' ? (s === 'morning' ? 'सकाळचा' : 'रात्रीचा') : (s === 'morning' ? 'Morning' : 'Evening');
+
+  if (deliveredSessions.length === 1) {
+    const { price, label } = deliveredSessions[0];
+    const sLabel = sessionName(deliveredSessions[0].session);
+    const noteLine = label
+      ? language === 'mr'
+        ? `\nटीप: ${label}`
+        : `\nNote: ${label}`
+      : '';
+    if (language === 'mr') {
+      return `नमस्कार ${custName}जी! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${dateFull} - ${sLabel} डबा दिला गेला.\nरक्कम: ₹${price}${noteLine}\n\nधन्यवाद! 😊`;
+    }
+    return `Hello ${custName}! 🙏\n*Shravani Tiffin Center*\n\n${dateFull} - ${sLabel} tiffin delivered.\nAmount: ₹${price}${noteLine}\n\nThank you! 😊`;
   }
-  return `Hello ${custName}! 🙏\n*Shravani Tiffin Center*\n\n${dateFull} - ${sessionLabel} tiffin delivered.\nAmount: ₹${price}\n\nThank you! 😊`;
+
+  const total = deliveredSessions.reduce((sum, s) => sum + s.price, 0);
+  const lines = deliveredSessions
+    .map((s) => {
+      const icon = s.session === 'morning' ? '🌅' : '🌙';
+      const noteSuffix = s.label ? ` (${s.label})` : '';
+      return `${icon} ${sessionName(s.session)}: ₹${s.price}${noteSuffix}`;
+    })
+    .join('\n');
+
+  if (language === 'mr') {
+    return `नमस्कार ${custName}जी! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${dateFull} - दोन्ही डबे दिले गेले.\n${lines}\nएकूण: ₹${total}\n\nधन्यवाद! 😊`;
+  }
+  return `Hello ${custName}! 🙏\n*Shravani Tiffin Center*\n\n${dateFull} - both tiffins delivered.\n${lines}\nTotal: ₹${total}\n\nThank you! 😊`;
 }
 
 interface TodayScreenProps {
@@ -772,9 +805,17 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
 
           const cardLeaveRange = leaveRangeByCustomerId[cust.id];
 
-          // WhatsApp delivery message link builder
-          const buildWALink = (session: 'morning' | 'evening', price: number) => {
-            const msg = buildWhatsAppMsg(cust.name, session, dateFull, price, language);
+          // WhatsApp delivery message link builder — includes every session
+          // actually delivered that day (morning, evening, or both combined)
+          const deliveredSessionsForWA: { session: 'morning' | 'evening'; price: number; label?: string }[] = [];
+          if (mRec.status === 'delivered') {
+            deliveredSessionsForWA.push({ session: 'morning', price: mRec.price ?? cust.ratePerTiffin, label: mRec.label });
+          }
+          if (eRec.status === 'delivered') {
+            deliveredSessionsForWA.push({ session: 'evening', price: eRec.price ?? cust.ratePerTiffin, label: eRec.label });
+          }
+          const buildWALink = () => {
+            const msg = buildWhatsAppMsg(cust.name, deliveredSessionsForWA, dateFull, language);
             return `https://wa.me/91${cust.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
           };
 
@@ -835,13 +876,10 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
-                  {/* WhatsApp delivery alert button */}
-                  {cust.phone && (
+                  {/* WhatsApp delivery alert button — only shown once something is actually delivered */}
+                  {cust.phone && deliveredSessionsForWA.length > 0 && (
                     <a
-                      href={buildWALink(
-                        cust.mealTiming === 'night' ? 'evening' : 'morning',
-                        cust.mealTiming === 'night' ? (eRec.price ?? cust.ratePerTiffin) : (mRec.price ?? cust.ratePerTiffin)
-                      )}
+                      href={buildWALink()}
                       target="_blank"
                       rel="noreferrer"
                       aria-label="WhatsApp"
