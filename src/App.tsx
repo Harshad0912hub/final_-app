@@ -59,7 +59,7 @@ import {
 } from './firebase';
 import { NotificationsScreen } from './components/NotificationsScreen';
 import { getMonthKey } from './utils/dateUtils';
-import { computeCustomerCumulativeDueThroughMonth, getPreviousMonthPrefix } from './utils/duesUtils';
+import { computeCustomerCumulativeDueThroughMonth } from './utils/duesUtils';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
@@ -1225,14 +1225,16 @@ export default function App() {
     (c) => c.status === 'active' && !billedCustomerIdsThisMonth.has(c.id)
   ).length;
 
-  // Customers whose previous month's bill is still not fully paid
-  const previousMonthPrefix = getPreviousMonthPrefix();
+  // Customers with a current outstanding balance (all delivered bills to
+  // date minus all payments to date) - a running total, not scoped to a
+  // single "last month" window, so it stays accurate from day one.
+  const dueAsOfMonthKey = getMonthKey();
   const overdueCustomers = customers
     .filter((c) => c.status === 'active')
     .map((c) => ({
       id: c.id,
       name: c.name,
-      due: computeCustomerCumulativeDueThroughMonth(c, dayDeliveries, payments, previousMonthPrefix),
+      due: computeCustomerCumulativeDueThroughMonth(c, dayDeliveries, payments, dueAsOfMonthKey),
     }))
     .filter((c) => c.due > 0);
 

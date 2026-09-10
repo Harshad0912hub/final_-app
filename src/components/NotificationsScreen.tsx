@@ -105,12 +105,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                 </div>
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-[#0b1c30] leading-snug">
-                    {language === 'mr' ? 'मागील महिन्याची थकीत रक्कम' : "Last month's dues still pending"}
+                    {language === 'mr' ? 'सध्याची थकीत रक्कम' : 'Currently pending amount'}
                   </p>
                   <p className="text-[12px] text-[#5a4138] leading-tight">
                     {language === 'mr'
-                      ? `${formatNum(overdueCustomers.length)} ग्राहकांनी अजून पूर्ण रक्कम दिली नाही`
-                      : `${formatNum(overdueCustomers.length)} customers haven't cleared their bill yet`}
+                      ? `${formatNum(overdueCustomers.length)} ग्राहकांकडे सध्या रक्कम बाकी आहे`
+                      : `${formatNum(overdueCustomers.length)} customers currently have a pending balance`}
                   </p>
                 </div>
               </div>

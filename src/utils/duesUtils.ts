@@ -35,11 +35,3 @@ export function computeCustomerCumulativeDueThroughMonth(
 
   return Math.max(0, cumulativeBill - totalPaid);
 }
-
-export function getPreviousMonthPrefix(d: Date = new Date()): string {
-  const y = d.getFullYear();
-  const m = d.getMonth(); // 0-indexed
-  const prevMonth = m === 0 ? 11 : m - 1;
-  const prevYear = m === 0 ? y - 1 : y;
-  return `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}`;
-}
