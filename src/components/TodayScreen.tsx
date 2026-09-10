@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Customer, DayDelivery, Holiday } from '../types';
 import { useLanguage } from '../utils/LanguageContext';
-import { formatDateKey, getTodayDateKey } from '../utils/dateUtils';
+import { formatDateKey, getTodayDateKey, findUpcomingLeaveRange } from '../utils/dateUtils';
 
 // Helper: build the WhatsApp holiday-announcement message for one customer
 // A generic (not per-customer) holiday announcement, meant to be copied or
@@ -135,6 +135,25 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   // Only consider active customers for daily delivery
   const activeCustomers = customers.filter((c) => c.status === 'active');
 
+  // Upcoming/current leave range per customer (not tied to whichever day is
+  // currently being viewed) - shown so a scheduled leave is visible even
+  // before it starts, matching the same "On Leave" indicator on Customers.
+  const leaveRangeByCustomerId: Record<string, { from: string; to: string } | null> = {};
+  activeCustomers.forEach((c) => {
+    leaveRangeByCustomerId[c.id] = findUpcomingLeaveRange(c.id, dayDeliveries, c.mealTiming);
+  });
+
+  const formatLeaveBadge = (from: string, to: string): string => {
+    const fmt = (key: string) => {
+      const [, m, d] = key.split('-');
+      const monthNamesMr = ['जाने', 'फेब्रु', 'मार्च', 'एप्रि', 'मे', 'जून', 'जुलै', 'ऑग', 'सप्टें', 'ऑक्टो', 'नोव्हें', 'डिसें'];
+      const monthNamesEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const months = language === 'mr' ? monthNamesMr : monthNamesEn;
+      return `${Number(d)} ${months[Number(m) - 1]}`;
+    };
+    return from === to ? fmt(from) : `${fmt(from)} - ${fmt(to)}`;
+  };
+
   // Real-time calculation of planned, delivered, leaves, and revenue
   let plannedMorning = 0;
   let plannedEvening = 0;
@@ -238,14 +257,10 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
     const isDone = mDone && eDone;
 
     const hasPending = (morningApplicable && mStatus === 'pending') || (eveningApplicable && eStatus === 'pending');
-    const isOnLeave =
-      (!morningApplicable || mStatus === 'leave') &&
-      (!eveningApplicable || eStatus === 'leave') &&
-      (morningApplicable || eveningApplicable);
 
     if (filter === 'pending') return hasPending;
     if (filter === 'done') return isDone;
-    if (filter === 'leave') return isOnLeave;
+    if (filter === 'leave') return !!leaveRangeByCustomerId[cust.id];
     return true;
   });
 
@@ -268,16 +283,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
            (!eveningApplicable || eStatus === 'delivered' || eStatus === 'leave');
   }).length;
 
-  const leaveCount = activeCustomers.filter((cust) => {
-    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
-    const morningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
-    const eveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
-    const mStatus = rec?.morning?.status || 'pending';
-    const eStatus = rec?.evening?.status || 'pending';
-    return (!morningApplicable || mStatus === 'leave') &&
-           (!eveningApplicable || eStatus === 'leave') &&
-           (morningApplicable || eveningApplicable);
-  }).length;
+  const leaveCount = activeCustomers.filter((cust) => !!leaveRangeByCustomerId[cust.id]).length;
 
   return (
     <div className="flex flex-col w-full pb-20 pt-1">
@@ -764,12 +770,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           const mRec = record?.morning || { status: 'pending', price: cust.ratePerTiffin };
           const eRec = record?.evening || { status: 'pending', price: cust.ratePerTiffin };
 
-          const cardMorningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
-          const cardEveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
-          const isOnLeaveToday =
-            (!cardMorningApplicable || mRec.status === 'leave') &&
-            (!cardEveningApplicable || eRec.status === 'leave') &&
-            (cardMorningApplicable || cardEveningApplicable);
+          const cardLeaveRange = leaveRangeByCustomerId[cust.id];
 
           // WhatsApp delivery message link builder
           const buildWALink = (session: 'morning' | 'evening', price: number) => {
@@ -809,10 +810,11 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                           ? (language === 'mr' ? 'मांसाहारी' : 'Non-Veg')
                           : (language === 'mr' ? 'शाकाहारी' : 'Veg')}
                       </span>
-                      {isOnLeaveToday && (
+                      {cardLeaveRange && (
                         <span className="font-label-sm text-[10px] px-1.5 py-0.5 rounded font-bold bg-[#ffdcc3] text-[#6e3900] flex items-center gap-0.5">
                           <span className="material-symbols-outlined text-[11px]">flight_takeoff</span>
-                          {language === 'mr' ? 'सुट्टीवर' : 'On Leave'}
+                          {language === 'mr' ? 'सुट्टी: ' : 'Leave: '}
+                          {formatLeaveBadge(cardLeaveRange.from, cardLeaveRange.to)}
                         </span>
                       )}
                     </div>
