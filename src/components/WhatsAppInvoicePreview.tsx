@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Customer, PaymentRecord } from '../types';
+import { Customer, PaymentRecord, SelectedExtra } from '../types';
 import { useLanguage } from '../utils/LanguageContext';
 import { generateSingleInvoicePDF } from '../utils/pdfGenerator';
 
@@ -13,7 +13,7 @@ interface WhatsAppInvoicePreviewProps {
   payments?: PaymentRecord[];
   totalLeaveDays?: number;
   leaveDateKeys?: string[];
-  noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[];
+  noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
   onBack: () => void;
 }
 
@@ -58,16 +58,27 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
       ? `Leave Days: ${formatNum(totalLeaveDays)}${leaveDatesStr ? ` (${leaveDatesStr})` : ''} - not charged\n`
       : '';
 
+  const formatExtrasForText = (extras?: SelectedExtra[]) =>
+    extras && extras.length > 0 ? extras.map((ex) => `${ex.name} (+₹${ex.price})`).join(', ') : '';
+
   const noteLinesMr =
     noteEntries.length > 0
       ? `\nविशेष नोंदी:\n${noteEntries
-          .map((e) => `- ${formatLeaveDateKey(e.dateKey)} (${e.session === 'morning' ? 'सकाळ' : 'संध्याकाळ'}, ₹${e.price}): ${e.label}`)
+          .map((e) => {
+            const extrasText = formatExtrasForText(e.extras);
+            const detail = [extrasText, e.label].filter(Boolean).join(' · ');
+            return `- ${formatLeaveDateKey(e.dateKey)} (${e.session === 'morning' ? 'सकाळ' : 'संध्याकाळ'}, ₹${e.price})${detail ? `: ${detail}` : ''}`;
+          })
           .join('\n')}\n`
       : '';
   const noteLinesEn =
     noteEntries.length > 0
       ? `\nSpecial Notes:\n${noteEntries
-          .map((e) => `- ${formatLeaveDateKey(e.dateKey)} (${e.session === 'morning' ? 'Morning' : 'Evening'}, ₹${e.price}): ${e.label}`)
+          .map((e) => {
+            const extrasText = formatExtrasForText(e.extras);
+            const detail = [extrasText, e.label].filter(Boolean).join(' · ');
+            return `- ${formatLeaveDateKey(e.dateKey)} (${e.session === 'morning' ? 'Morning' : 'Evening'}, ₹${e.price})${detail ? `: ${detail}` : ''}`;
+          })
           .join('\n')}\n`
       : '';
 
@@ -291,7 +302,8 @@ Thank you!`;
             <div className="flex flex-col gap-0.5">
               {noteEntries.map((entry, idx) => (
                 <p key={idx} className="font-body-sm text-[11px] text-[#5a4138]">
-                  {formatLeaveDateKey(entry.dateKey)} ({entry.session === 'morning' ? (language === 'mr' ? 'सकाळ' : 'Morning') : (language === 'mr' ? 'संध्याकाळ' : 'Evening')}, {formatCurrency(entry.price)}): {entry.label}
+                  {formatLeaveDateKey(entry.dateKey)} ({entry.session === 'morning' ? (language === 'mr' ? 'सकाळ' : 'Morning') : (language === 'mr' ? 'संध्याकाळ' : 'Evening')}, {formatCurrency(entry.price)}):{' '}
+                  {[formatExtrasForText(entry.extras), entry.label].filter(Boolean).join(' · ')}
                 </p>
               ))}
             </div>
@@ -433,7 +445,7 @@ Thank you!`;
               generateSingleInvoicePDF(
                 customer,
                 monthStr,
-                { totalTiffins, totalBill, paidAmount, dueAmount },
+                { totalTiffins, totalBill, paidAmount, dueAmount, totalLeaveDays, leaveDateKeys, noteEntries },
                 payments
               );
             }}

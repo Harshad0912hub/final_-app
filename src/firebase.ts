@@ -12,7 +12,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { Customer, DayDelivery, Holiday, PaymentRecord } from './types';
+import { Customer, DayDelivery, ExtraItem, Holiday, PaymentRecord } from './types';
 import { getTodayDateKey } from './utils/dateUtils';
 
 // Initialize Firebase App
@@ -78,6 +78,7 @@ const CUSTOMERS_COLLECTION = 'customers';
 const DELIVERIES_COLLECTION = 'daily_deliveries';
 const PAYMENTS_COLLECTION = 'payments';
 const HOLIDAYS_COLLECTION = 'holidays';
+const EXTRA_ITEMS_COLLECTION = 'extraItems';
 
 // Customer operations
 export async function saveCustomerToFirestore(customer: Customer): Promise<void> {
@@ -277,6 +278,41 @@ export function subscribeToHolidays(onData: (holidays: Holiday[]) => void): Unsu
   );
 }
 
+// Extra Items catalog (custom-priced extras like extra chapati, extra dabba, etc.)
+export async function saveExtraItemToFirestore(item: ExtraItem): Promise<void> {
+  try {
+    const docRef = doc(db, EXTRA_ITEMS_COLLECTION, item.id);
+    await setDoc(docRef, {
+      ...item,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${EXTRA_ITEMS_COLLECTION}/${item.id}`);
+  }
+}
+
+export async function deleteExtraItemFromFirestore(itemId: string): Promise<void> {
+  try {
+    const docRef = doc(db, EXTRA_ITEMS_COLLECTION, itemId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${EXTRA_ITEMS_COLLECTION}/${itemId}`);
+  }
+}
+
+export function subscribeToExtraItems(onData: (items: ExtraItem[]) => void): Unsubscribe {
+  const colRef = collection(db, EXTRA_ITEMS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snap) => {
+      const list: ExtraItem[] = [];
+      snap.forEach((d) => list.push(d.data() as ExtraItem));
+      onData(list);
+    },
+    (err) => handleFirestoreError(err, OperationType.LIST, EXTRA_ITEMS_COLLECTION)
+  );
+}
+
 // Clear all Firestore data
 export async function clearFirestoreData(): Promise<void> {
   try {
@@ -292,6 +328,9 @@ export async function clearFirestoreData(): Promise<void> {
 
     const holidaysSnap = await getDocs(collection(db, HOLIDAYS_COLLECTION));
     holidaysSnap.forEach((d) => batch.delete(d.ref));
+
+    const extraItemsSnap = await getDocs(collection(db, EXTRA_ITEMS_COLLECTION));
+    extraItemsSnap.forEach((d) => batch.delete(d.ref));
 
     await batch.commit();
   } catch (err) {

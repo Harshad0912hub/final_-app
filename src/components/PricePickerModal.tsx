@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Customer, DeliveryStatus, DietType } from '../types';
+import { Customer, DeliveryStatus, DietType, ExtraItem, SelectedExtra } from '../types';
 import { useLanguage } from '../utils/LanguageContext';
 
 interface PricePickerModalProps {
@@ -10,9 +10,13 @@ interface PricePickerModalProps {
   currentStatus: DeliveryStatus;
   currentDietType?: DietType;
   currentLabel?: string;
+  currentExtras?: SelectedExtra[];
   dateStr?: string;
+  extraItems: ExtraItem[];
+  onSaveExtraItem: (item: ExtraItem) => void;
+  onDeleteExtraItem: (itemId: string) => void;
   onClose: () => void;
-  onConfirmDelivery: (price: number, dietType?: DietType, label?: string) => void;
+  onConfirmDelivery: (price: number, dietType?: DietType, label?: string, extras?: SelectedExtra[]) => void;
   onMarkLeave: () => void;
   onClearMark: () => void;
 }
@@ -24,28 +28,66 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
   currentPrice: initialPrice,
   currentDietType,
   currentLabel,
+  currentExtras,
   dateStr,
+  extraItems,
+  onSaveExtraItem,
+  onDeleteExtraItem,
   onClose,
   onConfirmDelivery,
   onMarkLeave,
   onClearMark,
 }) => {
   const { language, t, formatNum, formatCurrency } = useLanguage();
-  const [selectedPrice, setSelectedPrice] = useState<number>(initialPrice || 70);
+  const [basePrice, setBasePrice] = useState<number>(initialPrice || 70);
   const [selectedDiet, setSelectedDiet] = useState<DietType>(currentDietType || customer?.dietType || 'veg');
   const [note, setNote] = useState<string>(currentLabel || '');
   const [showCustomBox, setShowCustomBox] = useState(false);
+  const [selectedExtraNames, setSelectedExtraNames] = useState<string[]>((currentExtras || []).map((e) => e.name));
+  const [showAddExtraForm, setShowAddExtraForm] = useState(false);
+  const [newExtraName, setNewExtraName] = useState('');
+  const [newExtraPrice, setNewExtraPrice] = useState('');
 
   useEffect(() => {
-    const defaultP = initialPrice || customer?.ratePerTiffin || 70;
-    setSelectedPrice(defaultP);
+    // The base price previously stored already includes any extras that
+    // were selected at the time, so subtract them back out to isolate the
+    // plain tiffin rate for editing.
+    const priorExtrasTotal = (currentExtras || []).reduce((sum, e) => sum + e.price, 0);
+    const defaultP = (initialPrice || customer?.ratePerTiffin || 70) - priorExtrasTotal;
+    setBasePrice(Math.max(0, defaultP));
     setSelectedDiet(currentDietType || customer?.dietType || 'veg');
     setNote(currentLabel || '');
+    setSelectedExtraNames((currentExtras || []).map((e) => e.name));
     // If current price is not standard preset, open custom box
     if (![55, 60, 65, 70, 75, 80].includes(defaultP)) {
       setShowCustomBox(true);
     }
-  }, [initialPrice, currentDietType, currentLabel, customer]);
+  }, [initialPrice, currentDietType, currentLabel, currentExtras, customer]);
+
+  // Resolve selected extra names against the live catalog so price edits to
+  // a catalog item are reflected immediately, and compute the running total.
+  const selectedExtras: SelectedExtra[] = selectedExtraNames
+    .map((name) => extraItems.find((it) => it.name === name))
+    .filter((it): it is ExtraItem => !!it)
+    .map((it) => ({ name: it.name, price: it.price }));
+  const extrasTotal = selectedExtras.reduce((sum, e) => sum + e.price, 0);
+  const selectedPrice = basePrice + extrasTotal;
+
+  const toggleExtra = (name: string) => {
+    setSelectedExtraNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+  };
+
+  const handleAddExtraItem = () => {
+    const name = newExtraName.trim();
+    const price = Number(newExtraPrice);
+    if (!name || isNaN(price) || price <= 0) return;
+    const item: ExtraItem = { id: `extra-${Date.now()}`, name, price, createdAt: new Date().toISOString() };
+    onSaveExtraItem(item);
+    setSelectedExtraNames((prev) => [...prev, name]);
+    setNewExtraName('');
+    setNewExtraPrice('');
+    setShowAddExtraForm(false);
+  };
 
   if (!isOpen || !customer) return null;
 
@@ -55,17 +97,17 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
       : (language === 'mr' ? 'संध्याकाळ' : 'Evening');
 
   const handlePriceClick = (price: number) => {
-    setSelectedPrice(price);
+    setBasePrice(price);
   };
 
   const adjustPrice = (delta: number) => {
-    setSelectedPrice((prev) => Math.max(10, Math.min(999, prev + delta)));
+    setBasePrice((prev) => Math.max(10, Math.min(999, prev + delta)));
   };
 
   const handleCustomInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);
     if (!isNaN(val)) {
-      setSelectedPrice(Math.max(0, Math.min(999, val)));
+      setBasePrice(Math.max(0, Math.min(999, val)));
     }
   };
 
@@ -198,7 +240,7 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
           {/* Quick Preset Chips */}
           <div className="grid grid-cols-4 gap-2">
             {[50, 60, 70, 80].map((price) => {
-              const isSelected = selectedPrice === price && !showCustomBox;
+              const isSelected = basePrice === price && !showCustomBox;
               return (
                 <button
                   key={price}
@@ -233,7 +275,7 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
                 {language === 'mr' ? 'सानुकूल रक्कम बदला (Custom Price)' : 'Custom Price Controller'}
               </span>
               <span className="font-label-sm text-[11px] bg-[#dce9ff] text-[#0b1c30] px-2 py-0.5 rounded-full font-bold">
-                ₹{selectedPrice}
+                ₹{basePrice}
               </span>
             </div>
 
@@ -264,7 +306,7 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
                   min="0"
                   max="2000"
                   step="5"
-                  value={selectedPrice || ''}
+                  value={basePrice || ''}
                   onChange={handleCustomInputChange}
                   className="w-full h-11 pl-8 pr-3 text-center rounded-xl bg-white text-[#0b1c30] font-headline-sm text-[20px] font-bold border-2 border-[#a33900]/40 focus:border-[#a33900] focus:outline-none shadow-xs"
                   placeholder="0"
@@ -295,9 +337,9 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
                 <button
                   key={p}
                   type="button"
-                  onClick={() => setSelectedPrice(p)}
+                  onClick={() => setBasePrice(p)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all ${
-                    selectedPrice === p
+                    basePrice === p
                       ? 'bg-[#a33900] text-white'
                       : 'bg-white text-[#5a4138] border border-[#dce9ff] hover:bg-[#e5eeff]'
                   }`}
@@ -309,18 +351,117 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
           </div>
         </div>
 
-        {/* Optional note - why the price is different (extra chapati, extra dabba etc.) */}
+        {/* Extras: reusable catalog of custom-priced add-ons (extra chapati, extra dabba, etc.) */}
+        <div className="mb-4 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="font-label-sm text-[13px] text-[#5a4138] font-bold flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px] text-[#a33900]">add_shopping_cart</span>
+              {language === 'mr' ? 'Extras (जास्तीचे पदार्थ) निवडा' : 'Select Extras'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowAddExtraForm((v) => !v)}
+              className="text-[12px] font-bold text-[#a33900] underline underline-offset-2 flex items-center gap-0.5"
+            >
+              <span className="material-symbols-outlined text-[15px]">add_circle</span>
+              <span>{language === 'mr' ? 'नवीन Extra जोडा' : 'Add New Extra'}</span>
+            </button>
+          </div>
+
+          {extraItems.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {extraItems.map((item) => {
+                const isChecked = selectedExtraNames.includes(item.name);
+                return (
+                  <div key={item.id} className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => toggleExtra(item.name)}
+                      className={`flex items-center gap-1.5 pl-2.5 pr-7 py-2 rounded-xl border font-label-sm text-[12.5px] font-bold transition-all active:scale-95 ${
+                        isChecked
+                          ? 'bg-[#a33900] text-white border-[#a33900] shadow-sm'
+                          : 'bg-[#eff4ff] text-[#0b1c30] border-[#dce9ff] hover:bg-[#dce9ff]'
+                      }`}
+                    >
+                      <span
+                        className={`w-3.5 h-3.5 rounded-[4px] border-2 flex items-center justify-center ${
+                          isChecked ? 'border-white bg-white/20' : 'border-[#5a4138]'
+                        }`}
+                      >
+                        {isChecked && <span className="material-symbols-outlined text-[11px] leading-none">check</span>}
+                      </span>
+                      <span>{item.name}</span>
+                      <span className={isChecked ? 'text-white/85' : 'text-[#a33900]'}>+₹{item.price}</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={language === 'mr' ? 'Extra काढा' : 'Remove extra'}
+                      onClick={() => {
+                        setSelectedExtraNames((prev) => prev.filter((n) => n !== item.name));
+                        onDeleteExtraItem(item.id);
+                      }}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-[#ba1a1a] bg-white/90 hover:bg-[#ffdad6] active:scale-90"
+                      title={language === 'mr' ? 'Catalog मधून कायमचे काढा' : 'Remove permanently from catalog'}
+                    >
+                      <span className="material-symbols-outlined text-[13px]">close</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {showAddExtraForm && (
+            <div className="bg-[#f8faff] p-2.5 rounded-xl border border-[#dce9ff] flex items-center gap-2">
+              <input
+                type="text"
+                value={newExtraName}
+                onChange={(e) => setNewExtraName(e.target.value)}
+                placeholder={language === 'mr' ? 'नाव (उदा. जास्तीची चपाती)' : 'Name (e.g. Extra chapati)'}
+                className="flex-1 h-10 px-2.5 rounded-lg bg-white text-[#0b1c30] font-body-sm text-[12.5px] border border-[#dce9ff] focus:outline-none focus:border-[#a33900] placeholder:text-[#5a4138]/50"
+              />
+              <input
+                type="number"
+                min="1"
+                value={newExtraPrice}
+                onChange={(e) => setNewExtraPrice(e.target.value)}
+                placeholder={language === 'mr' ? 'किंमत' : 'Price'}
+                className="w-20 h-10 px-2 rounded-lg bg-white text-[#0b1c30] font-body-sm text-[12.5px] border border-[#dce9ff] focus:outline-none focus:border-[#a33900] placeholder:text-[#5a4138]/50"
+              />
+              <button
+                type="button"
+                onClick={handleAddExtraItem}
+                className="h-10 px-3 rounded-lg bg-[#a33900] text-white font-label-sm text-[12.5px] font-bold active:scale-95"
+              >
+                {language === 'mr' ? 'जोडा' : 'Add'}
+              </button>
+            </div>
+          )}
+
+          {extrasTotal > 0 && (
+            <div className="flex items-center justify-between bg-[#fff3e0] px-3 py-2 rounded-xl">
+              <span className="font-label-sm text-[12px] text-[#8d4b00] font-semibold">
+                {language === 'mr' ? `डबा ₹${basePrice} + Extras ₹${extrasTotal}` : `Tiffin ₹${basePrice} + Extras ₹${extrasTotal}`}
+              </span>
+              <span className="font-label-md text-[13px] text-[#a33900] font-bold">
+                {language === 'mr' ? 'एकूण:' : 'Total:'} ₹{selectedPrice}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Optional note - any additional remark not covered by an Extra item */}
         <div className="mb-4">
           <label className="flex flex-col gap-1">
             <span className="font-label-sm text-[12px] text-[#5a4138] font-semibold flex items-center gap-1">
               <span className="material-symbols-outlined text-[15px] text-[#a33900]">edit_note</span>
-              {language === 'mr' ? 'टीप (कारण) - ऐच्छिक' : 'Note (Reason) - Optional'}
+              {language === 'mr' ? 'अतिरिक्त टीप - ऐच्छिक' : 'Additional Note - Optional'}
             </span>
             <input
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder={language === 'mr' ? 'उदा. १ जास्तीचा डबा, एक्स्ट्रा चपाती' : 'e.g. Extra dabba, extra chapati'}
+              placeholder={language === 'mr' ? 'उदा. उशिरा दिला, विशेष विनंती' : 'e.g. Delivered late, special request'}
               className="h-11 px-3 rounded-xl bg-[#eff4ff] text-[#0b1c30] font-body-md text-[13px] border border-[#dce9ff] focus:outline-none focus:border-[#a33900] placeholder:text-[#5a4138]/50"
             />
           </label>
@@ -331,7 +472,7 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
           {/* Primary: डबा दिला */}
           <button
             type="button"
-            onClick={() => onConfirmDelivery(selectedPrice, selectedDiet, note.trim() || undefined)}
+            onClick={() => onConfirmDelivery(selectedPrice, selectedDiet, note.trim() || undefined, selectedExtras)}
             className="w-full min-h-[48px] bg-[#a33900] text-white font-label-lg text-[15px] font-bold rounded-full flex items-center justify-center gap-2 shadow-md hover:bg-[#8d4b00] active:scale-[0.98] transition-all"
           >
             <span className="material-symbols-outlined text-[20px]">check_circle</span>

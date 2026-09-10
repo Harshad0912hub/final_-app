@@ -22,6 +22,7 @@ import {
   DayDelivery,
   PaymentRecord,
   Holiday,
+  ExtraItem,
   ActiveTab,
   PricePickerState,
 } from './types';
@@ -43,6 +44,9 @@ import {
   subscribeToHolidays,
   saveHolidayToFirestore,
   deleteHolidayFromFirestore,
+  subscribeToExtraItems,
+  saveExtraItemToFirestore,
+  deleteExtraItemFromFirestore,
   clearFirestoreData,
 } from './firebase';
 
@@ -134,6 +138,15 @@ export default function App() {
     }
   });
 
+  const [extraItems, setExtraItems] = useState<ExtraItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('shravani_extra_items');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('shravani_customers');
@@ -157,6 +170,7 @@ export default function App() {
     let unsubDeliveries: (() => void) | undefined;
     let unsubPayments: (() => void) | undefined;
     let unsubHolidays: (() => void) | undefined;
+    let unsubExtraItems: (() => void) | undefined;
 
     async function connectCloudSync() {
       setIsLoadingCloud(true);
@@ -196,6 +210,11 @@ export default function App() {
             if (!isMounted) return;
             setHolidays(remoteHolidays);
           });
+
+          unsubExtraItems = subscribeToExtraItems((remoteExtraItems) => {
+            if (!isMounted) return;
+            setExtraItems(remoteExtraItems);
+          });
         }
       } catch (e) {
         console.warn('Firebase live sync skipped or offline:', e);
@@ -211,6 +230,7 @@ export default function App() {
       unsubDeliveries?.();
       unsubPayments?.();
       unsubHolidays?.();
+      unsubExtraItems?.();
     };
   }, []);
 
@@ -231,17 +251,23 @@ export default function App() {
     localStorage.setItem('shravani_holidays', JSON.stringify(holidays));
   }, [holidays]);
 
+  useEffect(() => {
+    localStorage.setItem('shravani_extra_items', JSON.stringify(extraItems));
+  }, [extraItems]);
+
   // Handler: Clear All Data
   const handleClearAllData = async () => {
     setCustomers([]);
     setDayDeliveries({});
     setPayments([]);
     setHolidays([]);
+    setExtraItems([]);
     setSelectedCustomerId('');
     localStorage.removeItem('shravani_customers');
     localStorage.removeItem('shravani_deliveries');
     localStorage.removeItem('shravani_payments');
     localStorage.removeItem('shravani_holidays');
+    localStorage.removeItem('shravani_extra_items');
 
     // Also clear from cloud database
     await clearFirestoreData();
@@ -257,6 +283,7 @@ export default function App() {
       dayDeliveries,
       payments,
       holidays,
+      extraItems,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -283,6 +310,7 @@ export default function App() {
       const restoredDeliveries: Record<string, DayDelivery> = parsed.dayDeliveries || {};
       const restoredPayments: PaymentRecord[] = Array.isArray(parsed.payments) ? parsed.payments : [];
       const restoredHolidays: Holiday[] = Array.isArray(parsed.holidays) ? parsed.holidays : [];
+      const restoredExtraItems: ExtraItem[] = Array.isArray(parsed.extraItems) ? parsed.extraItems : [];
 
       // Clear existing cloud data first so restore is a true revert to the
       // backup, not a merge that leaves behind anything added since then.
@@ -292,6 +320,7 @@ export default function App() {
       setDayDeliveries(restoredDeliveries);
       setPayments(restoredPayments);
       setHolidays(restoredHolidays);
+      setExtraItems(restoredExtraItems);
       setSelectedCustomerId(restoredCustomers.length > 0 ? restoredCustomers[0].id : '');
 
       // Push everything back to the cloud so every device sees the restored data
@@ -300,6 +329,7 @@ export default function App() {
         ...Object.values(restoredDeliveries).map((d) => saveDeliveryToFirestore(d.customerId, d)),
         ...restoredPayments.map((p) => savePaymentToFirestore(p)),
         ...restoredHolidays.map((h) => saveHolidayToFirestore(h)),
+        ...restoredExtraItems.map((it) => saveExtraItemToFirestore(it)),
       ]);
 
       triggerToast('बॅकअप यशस्वीरित्या पुनर्संचयित झाला!');
@@ -331,7 +361,7 @@ export default function App() {
     dueAmount: 1100,
     totalLeaveDays: 0,
     leaveDateKeys: [] as string[],
-    noteEntries: [] as { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[],
+    noteEntries: [] as { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: { name: string; price: number }[] }[],
   });
 
   // Global toast feedback
@@ -378,13 +408,34 @@ export default function App() {
       currentStatus: sessionRec?.status || 'pending',
       currentDietType: sessionRec?.dietType || customer.dietType || 'veg',
       currentLabel: sessionRec?.label || '',
+      currentExtras: sessionRec?.extras || [],
       dateKey: activeDateKey,
       formattedDateStr: formattedDateStr,
     });
   };
 
+  // Handler: Add or update an Extra Item in the reusable catalog
+  const handleSaveExtraItem = (item: ExtraItem) => {
+    setExtraItems((prev) => {
+      const exists = prev.some((it) => it.id === item.id);
+      return exists ? prev.map((it) => (it.id === item.id ? item : it)) : [...prev, item];
+    });
+    saveExtraItemToFirestore(item).catch((err) => console.warn('Extra item save to cloud skipped:', err));
+  };
+
+  // Handler: Remove an Extra Item from the catalog (does not affect past bills already recorded)
+  const handleDeleteExtraItem = (itemId: string) => {
+    setExtraItems((prev) => prev.filter((it) => it.id !== itemId));
+    deleteExtraItemFromFirestore(itemId).catch((err) => console.warn('Extra item delete from cloud skipped:', err));
+  };
+
   // Handler: Confirm delivery from Price Picker
-  const handleConfirmDelivery = (price: number, dietType?: DietType, label?: string) => {
+  const handleConfirmDelivery = (
+    price: number,
+    dietType?: DietType,
+    label?: string,
+    extras?: { name: string; price: number }[]
+  ) => {
     const custId = pricePicker.customerId;
     const session = pricePicker.session;
     const activeDateKey = pricePicker.dateKey || getTodayDateKey();
@@ -408,7 +459,11 @@ export default function App() {
         status: 'delivered',
         price,
         dietType: chosenDiet,
-        label,
+        // Firestore's setDoc() throws if any nested field is explicitly
+        // `undefined` (rejecting the entire write) - so omit these keys
+        // entirely instead of setting them to undefined when empty.
+        ...(label ? { label } : {}),
+        ...(extras && extras.length > 0 ? { extras } : {}),
       },
     };
 
@@ -1173,7 +1228,11 @@ export default function App() {
         currentStatus={pricePicker.currentStatus}
         currentDietType={pricePicker.currentDietType}
         currentLabel={pricePicker.currentLabel}
+        currentExtras={pricePicker.currentExtras}
         dateStr={pricePicker.formattedDateStr}
+        extraItems={extraItems}
+        onSaveExtraItem={handleSaveExtraItem}
+        onDeleteExtraItem={handleDeleteExtraItem}
         onClose={() => setPricePicker((prev) => ({ ...prev, isOpen: false }))}
         onConfirmDelivery={handleConfirmDelivery}
         onMarkLeave={handleMarkLeave}

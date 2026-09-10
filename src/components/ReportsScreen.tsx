@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Customer, PaymentRecord, DayDelivery } from '../types';
+import { Customer, PaymentRecord, DayDelivery, SelectedExtra } from '../types';
 import { useLanguage } from '../utils/LanguageContext';
 import {
   generateSingleInvoicePDF,
@@ -25,7 +25,7 @@ interface ReportsScreenProps {
     dueAmount: number;
     totalLeaveDays: number;
     leaveDateKeys: string[];
-    noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[];
+    noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
   }) => void;
 }
 
@@ -117,15 +117,15 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   let totalLeaveDays = 0;
   let totalBill = 0;
   const leaveDateKeys: string[] = [];
-  const noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[] = [];
+  const noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[] = [];
 
   deliveryList.forEach((del) => {
     let dayLeaves = 0;
     if (del.morning?.status === 'delivered') {
       totalTiffins++;
       totalBill += del.morning.price ?? selectedCustomer.ratePerTiffin;
-      if (del.morning.label) {
-        noteEntries.push({ dateKey: del.dateKey, session: 'morning', price: del.morning.price, label: del.morning.label });
+      if (del.morning.label || (del.morning.extras && del.morning.extras.length > 0)) {
+        noteEntries.push({ dateKey: del.dateKey, session: 'morning', price: del.morning.price, label: del.morning.label || '', extras: del.morning.extras });
       }
     } else if (del.morning?.status === 'leave') {
       dayLeaves++;
@@ -134,8 +134,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     if (del.evening?.status === 'delivered') {
       totalTiffins++;
       totalBill += del.evening.price ?? selectedCustomer.ratePerTiffin;
-      if (del.evening.label) {
-        noteEntries.push({ dateKey: del.dateKey, session: 'evening', price: del.evening.price, label: del.evening.label });
+      if (del.evening.label || (del.evening.extras && del.evening.extras.length > 0)) {
+        noteEntries.push({ dateKey: del.dateKey, session: 'evening', price: del.evening.price, label: del.evening.label || '', extras: del.evening.extras });
       }
     } else if (del.evening?.status === 'leave') {
       dayLeaves++;
@@ -408,6 +408,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               dueAmount,
               totalLeaveDays,
               leaveDateKeys,
+              noteEntries,
             })
           }
           className="w-full min-h-[50px] bg-[#25D366] hover:bg-[#1EBE5D] active:bg-[#1bb354] text-white p-3 rounded-2xl shadow-sm flex items-center justify-between transition-transform active:scale-[0.99]"
@@ -630,9 +631,19 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
               const isSunday = !isNaN(dateObj.getTime()) && dateObj.getDay() === 0;
 
+              const formatSessionNote = (icon: string, rec: typeof dayItem.morning) => {
+                if (rec?.status !== 'delivered') return null;
+                const extrasText =
+                  rec.extras && rec.extras.length > 0
+                    ? rec.extras.map((ex) => `${ex.name} (+₹${ex.price})`).join(', ')
+                    : '';
+                if (!extrasText && !rec.label) return null;
+                return `${icon} ${[extrasText, rec.label].filter(Boolean).join(' · ')}`;
+              };
+
               const dayNotes = [
-                dayItem.morning?.status === 'delivered' && dayItem.morning.label ? `🌅 ${dayItem.morning.label}` : null,
-                dayItem.evening?.status === 'delivered' && dayItem.evening.label ? `🌙 ${dayItem.evening.label}` : null,
+                formatSessionNote('🌅', dayItem.morning),
+                formatSessionNote('🌙', dayItem.evening),
               ].filter(Boolean);
 
               return (

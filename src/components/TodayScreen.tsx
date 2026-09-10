@@ -30,15 +30,18 @@ function buildHolidayBroadcastMsg(
 // total) when both morning and evening are done, not just one.
 function buildWhatsAppMsg(
   custName: string,
-  deliveredSessions: { session: 'morning' | 'evening'; price: number; label?: string }[],
+  deliveredSessions: { session: 'morning' | 'evening'; price: number; label?: string; extras?: { name: string; price: number }[] }[],
   dateFull: string,
   language: string
 ): string {
   const sessionName = (s: 'morning' | 'evening') =>
     language === 'mr' ? (s === 'morning' ? 'सकाळचा' : 'रात्रीचा') : (s === 'morning' ? 'Morning' : 'Evening');
 
+  const extrasSuffix = (extras?: { name: string; price: number }[]) =>
+    extras && extras.length > 0 ? ' + ' + extras.map((e) => `${e.name} (₹${e.price})`).join(' + ') : '';
+
   if (deliveredSessions.length === 1) {
-    const { price, label } = deliveredSessions[0];
+    const { price, label, extras } = deliveredSessions[0];
     const sLabel = sessionName(deliveredSessions[0].session);
     const noteLine = label
       ? language === 'mr'
@@ -46,9 +49,9 @@ function buildWhatsAppMsg(
         : `\nNote: ${label}`
       : '';
     if (language === 'mr') {
-      return `नमस्कार ${custName}जी! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${dateFull} - ${sLabel} डबा दिला गेला.\nरक्कम: ₹${price}${noteLine}\n\nधन्यवाद! 😊`;
+      return `नमस्कार ${custName}जी! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${dateFull} - ${sLabel} डबा दिला गेला.\nरक्कम: ₹${price}${extrasSuffix(extras)}${noteLine}\n\nधन्यवाद! 😊`;
     }
-    return `Hello ${custName}! 🙏\n*Shravani Tiffin Center*\n\n${dateFull} - ${sLabel} tiffin delivered.\nAmount: ₹${price}${noteLine}\n\nThank you! 😊`;
+    return `Hello ${custName}! 🙏\n*Shravani Tiffin Center*\n\n${dateFull} - ${sLabel} tiffin delivered.\nAmount: ₹${price}${extrasSuffix(extras)}${noteLine}\n\nThank you! 😊`;
   }
 
   const total = deliveredSessions.reduce((sum, s) => sum + s.price, 0);
@@ -56,7 +59,7 @@ function buildWhatsAppMsg(
     .map((s) => {
       const icon = s.session === 'morning' ? '🌅' : '🌙';
       const noteSuffix = s.label ? ` (${s.label})` : '';
-      return `${icon} ${sessionName(s.session)}: ₹${s.price}${noteSuffix}`;
+      return `${icon} ${sessionName(s.session)}: ₹${s.price}${extrasSuffix(s.extras)}${noteSuffix}`;
     })
     .join('\n');
 
@@ -807,12 +810,12 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
 
           // WhatsApp delivery message link builder — includes every session
           // actually delivered that day (morning, evening, or both combined)
-          const deliveredSessionsForWA: { session: 'morning' | 'evening'; price: number; label?: string }[] = [];
+          const deliveredSessionsForWA: { session: 'morning' | 'evening'; price: number; label?: string; extras?: { name: string; price: number }[] }[] = [];
           if (mRec.status === 'delivered') {
-            deliveredSessionsForWA.push({ session: 'morning', price: mRec.price ?? cust.ratePerTiffin, label: mRec.label });
+            deliveredSessionsForWA.push({ session: 'morning', price: mRec.price ?? cust.ratePerTiffin, label: mRec.label, extras: mRec.extras });
           }
           if (eRec.status === 'delivered') {
-            deliveredSessionsForWA.push({ session: 'evening', price: eRec.price ?? cust.ratePerTiffin, label: eRec.label });
+            deliveredSessionsForWA.push({ session: 'evening', price: eRec.price ?? cust.ratePerTiffin, label: eRec.label, extras: eRec.extras });
           }
           const buildWALink = () => {
             const msg = buildWhatsAppMsg(cust.name, deliveredSessionsForWA, dateFull, language);
@@ -1020,18 +1023,31 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 )}
               </div>
 
-              {(mRec.status === 'delivered' && mRec.label) || (eRec.status === 'delivered' && eRec.label) ? (
+              {(mRec.status === 'delivered' && (mRec.label || (mRec.extras && mRec.extras.length > 0))) ||
+              (eRec.status === 'delivered' && (eRec.label || (eRec.extras && eRec.extras.length > 0))) ? (
                 <div className="flex flex-col gap-0.5">
-                  {mRec.status === 'delivered' && mRec.label && (
-                    <p className="font-body-sm text-[11px] text-[#8d4b00] flex items-center gap-1">
+                  {mRec.status === 'delivered' && (mRec.label || (mRec.extras && mRec.extras.length > 0)) && (
+                    <p className="font-body-sm text-[11px] text-[#8d4b00] flex items-center gap-1 flex-wrap">
                       <span className="material-symbols-outlined text-[13px]">edit_note</span>
-                      <span>🌅 {mRec.label}</span>
+                      <span>🌅</span>
+                      {mRec.extras?.map((ex) => (
+                        <span key={ex.name} className="bg-[#fff3e0] px-1.5 py-0.5 rounded font-semibold">
+                          {ex.name} +₹{ex.price}
+                        </span>
+                      ))}
+                      {mRec.label && <span>{mRec.label}</span>}
                     </p>
                   )}
-                  {eRec.status === 'delivered' && eRec.label && (
-                    <p className="font-body-sm text-[11px] text-[#8d4b00] flex items-center gap-1">
+                  {eRec.status === 'delivered' && (eRec.label || (eRec.extras && eRec.extras.length > 0)) && (
+                    <p className="font-body-sm text-[11px] text-[#8d4b00] flex items-center gap-1 flex-wrap">
                       <span className="material-symbols-outlined text-[13px]">edit_note</span>
-                      <span>🌙 {eRec.label}</span>
+                      <span>🌙</span>
+                      {eRec.extras?.map((ex) => (
+                        <span key={ex.name} className="bg-[#fff3e0] px-1.5 py-0.5 rounded font-semibold">
+                          {ex.name} +₹{ex.price}
+                        </span>
+                      ))}
+                      {eRec.label && <span>{eRec.label}</span>}
                     </p>
                   )}
                 </div>

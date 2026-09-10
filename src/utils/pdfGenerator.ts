@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import { Customer, DayDelivery, PaymentRecord } from '../types';
+import { Customer, DayDelivery, PaymentRecord, SelectedExtra } from '../types';
 import { getTodayDateKey } from './dateUtils';
 
 export interface InvoiceMetrics {
@@ -9,7 +9,7 @@ export interface InvoiceMetrics {
   dueAmount: number;
   totalLeaveDays?: number;
   leaveDateKeys?: string[];
-  noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[];
+  noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
 }
 
 const PDF_MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -229,7 +229,12 @@ export function generateSingleInvoicePDF(
       doc.setTextColor(141, 75, 0);
       const cleanDate = formatDateKeyForPDF(entry.dateKey);
       const sessionLabel = entry.session === 'morning' ? 'Morning' : 'Evening';
-      doc.text(`- ${cleanDate} (${sessionLabel}, Rs. ${entry.price}): ${entry.label}`, 18, currentY);
+      const extrasText =
+        entry.extras && entry.extras.length > 0
+          ? entry.extras.map((ex) => `${ex.name} (+Rs. ${ex.price})`).join(', ')
+          : '';
+      const detail = [extrasText, entry.label].filter(Boolean).join(' | ');
+      doc.text(`- ${cleanDate} (${sessionLabel}, Rs. ${entry.price})${detail ? `: ${detail}` : ''}`, 18, currentY);
     });
     currentY += 6;
   }

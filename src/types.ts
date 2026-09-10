@@ -21,11 +21,17 @@ export interface Customer {
   avatarBg: string;
 }
 
+export interface SelectedExtra {
+  name: string;
+  price: number;
+}
+
 export interface MealSessionRecord {
   status: DeliveryStatus;
   price: number;
   dietType?: DietType;
   label?: string;
+  extras?: SelectedExtra[];
 }
 
 export interface DayDelivery {
@@ -53,6 +59,13 @@ export interface Holiday {
   createdAt?: string;
 }
 
+export interface ExtraItem {
+  id: string;
+  name: string;
+  price: number;
+  createdAt?: string;
+}
+
 export type ActiveTab = 'today' | 'customers' | 'reports';
 
 export interface PricePickerState {
@@ -63,6 +76,7 @@ export interface PricePickerState {
   currentStatus: DeliveryStatus;
   currentDietType?: DietType;
   currentLabel?: string;
+  currentExtras?: SelectedExtra[];
   dateKey?: string;
   formattedDateStr?: string;
 }
