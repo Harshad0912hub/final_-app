@@ -1209,18 +1209,43 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 </h4>
                 <p className="font-body-sm text-[12px] text-[#5a4138] mt-1">
                   {language === 'mr'
-                    ? 'हा संदेश कॉपी करा किंवा तुमच्या स्वतःच्या WhatsApp ब्रॉडकास्ट लिस्ट / ग्रुपमध्ये पाठवा.'
-                    : 'Copy this message or send it via your own WhatsApp broadcast list / group.'}
+                    ? 'एका क्लिकवर शेअर करा - WhatsApp ब्रॉडकास्ट लिस्ट किंवा ग्रुप निवडा.'
+                    : 'Share in one tap - pick your WhatsApp broadcast list or group.'}
                 </p>
               </div>
               <div className="w-full bg-[#eff4ff] rounded-xl p-3 text-left">
                 <pre className="font-body-sm text-[13px] text-[#0b1c30] whitespace-pre-wrap font-sans">{msg}</pre>
               </div>
-              <div className="flex gap-2 w-full pt-1">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({ text: msg });
+                    } catch {
+                      // user cancelled - no action needed
+                    }
+                  } else {
+                    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+                  }
+                }}
+                className="w-full h-12 rounded-xl bg-[#25D366] text-white font-label-md text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#1ebe5a] active:scale-95 transition-all shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[20px]">share</span>
+                <div className="flex flex-col items-start leading-none text-left">
+                  <span className="text-[13px] font-bold">
+                    {language === 'mr' ? 'सुट्टीचा निरोप शेअर करा' : 'Share Holiday Notice'}
+                  </span>
+                  <span className="text-[10px] opacity-80 mt-0.5">
+                    {language === 'mr' ? 'WhatsApp Broadcast निवडा' : 'Pick WhatsApp Broadcast List'}
+                  </span>
+                </div>
+              </button>
+              <div className="flex gap-2 w-full">
                 <button
                   type="button"
                   onClick={() => setBroadcastHoliday(null)}
-                  className="flex-1 h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-lg text-[14px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
+                  className="flex-1 h-10 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-md text-[13px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
                 >
                   {language === 'mr' ? 'बंद करा' : 'Close'}
                 </button>
@@ -1235,11 +1260,11 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                       // ignore - clipboard may be unavailable
                     }
                   }}
-                  className={`flex-1 h-11 rounded-full font-label-lg text-[14px] font-bold shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 h-10 rounded-full font-label-md text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${
                     broadcastCopied ? 'bg-[#7cf994] text-[#007230]' : 'bg-[#eff4ff] text-[#0b1c30] hover:bg-[#dce9ff]'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">
+                  <span className="material-symbols-outlined text-[16px]">
                     {broadcastCopied ? 'done' : 'content_copy'}
                   </span>
                   <span>
@@ -1249,15 +1274,6 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                   </span>
                 </button>
               </div>
-              <a
-                href={`https://wa.me/?text=${encodeURIComponent(msg)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full h-11 rounded-full bg-[#25D366] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#1EBE5D] active:scale-95 transition-all flex items-center justify-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-[18px]">chat</span>
-                <span>{language === 'mr' ? 'WhatsApp उघडा' : 'Open WhatsApp'}</span>
-              </a>
             </div>
           </div>
         );
