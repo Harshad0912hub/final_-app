@@ -8,6 +8,7 @@ interface CustomersScreenProps {
   onOpenEditModal: (customer: Customer) => void;
   onToggleCustomerStatus: (customerId: string, status: 'active' | 'inactive') => void;
   onDeleteCustomer?: (customerId: string) => void;
+  onMarkLeaveRange?: (customerId: string, fromDateKey: string, toDateKey: string) => void;
 }
 
 export const CustomersScreen: React.FC<CustomersScreenProps> = ({
@@ -16,10 +17,14 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
   onOpenEditModal,
   onToggleCustomerStatus,
   onDeleteCustomer,
+  onMarkLeaveRange,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [customerForLeave, setCustomerForLeave] = useState<Customer | null>(null);
+  const [leaveFrom, setLeaveFrom] = useState('');
+  const [leaveTo, setLeaveTo] = useState('');
   const { language, t, formatNum } = useLanguage();
 
   const activeCustomers = customers.filter((c) => c.status === 'active');
@@ -266,6 +271,21 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                     >
                       <span className="material-symbols-outlined text-[18px]">edit</span>
                     </button>
+                    {onMarkLeaveRange && (
+                      <button
+                        type="button"
+                        aria-label="Mark leave for a period"
+                        onClick={() => {
+                          setLeaveFrom('');
+                          setLeaveTo('');
+                          setCustomerForLeave(cust);
+                        }}
+                        className="w-9 h-9 rounded-full bg-[#eff4ff] flex items-center justify-center text-[#8d4b00] active:scale-90 hover:bg-[#ffdcc3] transition-transform"
+                        title={language === 'mr' ? 'सुट्टी कालावधी' : 'Mark Leave Period'}
+                      >
+                        <span className="material-symbols-outlined text-[18px]">flight_takeoff</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       aria-label="Deactivate"
@@ -455,6 +475,75 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
               >
                 <span className="material-symbols-outlined text-[18px]">delete</span>
                 <span>{language === 'mr' ? 'हटवा' : 'Delete'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark Leave Period Modal */}
+      {customerForLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center space-y-3.5 border border-[#eff4ff]">
+            <div className="w-14 h-14 rounded-full bg-[#ffdcc3] text-[#6e3900] flex items-center justify-center shadow-inner">
+              <span className="material-symbols-outlined text-[28px]">flight_takeoff</span>
+            </div>
+            <div>
+              <h4 className="font-headline-sm text-[18px] text-[#0b1c30] font-bold">
+                {language === 'mr' ? 'सुट्टीचा कालावधी निवडा' : 'Pick Leave Period'}
+              </h4>
+              <p className="font-body-sm text-[13px] text-[#5a4138] mt-1.5 leading-relaxed">
+                <strong className="text-[#0b1c30] font-semibold">{customerForLeave.name}</strong>
+                {language === 'mr'
+                  ? ' यांचे या कालावधीतील सर्व प्रलंबित डबे सुट्टी म्हणून नोंदवले जातील.'
+                  : "'s pending tiffins in this date range will be marked as leave."}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 w-full">
+              <label className="flex flex-col gap-1 text-left">
+                <span className="font-label-sm text-[11px] text-[#5a4138] font-semibold">
+                  {language === 'mr' ? 'पासून' : 'From'}
+                </span>
+                <input
+                  type="date"
+                  value={leaveFrom}
+                  onChange={(e) => setLeaveFrom(e.target.value)}
+                  className="h-10 px-2 rounded-xl bg-[#eff4ff] text-[#0b1c30] text-[13px] border border-[#dce9ff] focus:outline-none focus:ring-2 focus:ring-[#a33900]/30"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-left">
+                <span className="font-label-sm text-[11px] text-[#5a4138] font-semibold">
+                  {language === 'mr' ? 'पर्यंत' : 'To'}
+                </span>
+                <input
+                  type="date"
+                  value={leaveTo}
+                  onChange={(e) => setLeaveTo(e.target.value)}
+                  className="h-10 px-2 rounded-xl bg-[#eff4ff] text-[#0b1c30] text-[13px] border border-[#dce9ff] focus:outline-none focus:ring-2 focus:ring-[#a33900]/30"
+                />
+              </label>
+            </div>
+            <div className="flex gap-2 w-full pt-1">
+              <button
+                type="button"
+                onClick={() => setCustomerForLeave(null)}
+                className="flex-1 h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-lg text-[14px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={!leaveFrom || !leaveTo}
+                onClick={() => {
+                  if (onMarkLeaveRange && leaveFrom && leaveTo) {
+                    onMarkLeaveRange(customerForLeave.id, leaveFrom, leaveTo);
+                  }
+                  setCustomerForLeave(null);
+                }}
+                className="flex-1 h-11 rounded-full bg-[#8d4b00] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#6e3900] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[18px]">event_busy</span>
+                <span>{language === 'mr' ? 'सुट्टी नोंदवा' : 'Mark Leave'}</span>
               </button>
             </div>
           </div>

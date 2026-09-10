@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { Customer, DayDelivery, PaymentRecord } from './types';
+import { getTodayDateKey } from './utils/dateUtils';
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
@@ -149,7 +150,7 @@ export async function fetchDeliveriesFromFirestore(): Promise<Record<string, Day
     const result: Record<string, DayDelivery> = {};
     snap.forEach((d) => {
       const data = d.data() as DayDelivery;
-      const key = `${data.dateKey || '2026-09-09'}_${data.customerId}`;
+      const key = `${data.dateKey || getTodayDateKey()}_${data.customerId}`;
       result[key] = data;
       // also keep by customerId if legacy or today
       if (!result[data.customerId]) {
@@ -173,7 +174,7 @@ export function subscribeToDeliveries(
       const result: Record<string, DayDelivery> = {};
       snap.forEach((d) => {
         const data = d.data() as DayDelivery;
-        const key = `${data.dateKey || '2026-09-09'}_${data.customerId}`;
+        const key = `${data.dateKey || getTodayDateKey()}_${data.customerId}`;
         result[key] = data;
         if (!result[data.customerId]) {
           result[data.customerId] = data;

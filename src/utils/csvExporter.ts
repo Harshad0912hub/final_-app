@@ -1,4 +1,5 @@
 import { Customer, DayDelivery, PaymentRecord } from '../types';
+import { getTodayDateKey } from './dateUtils';
 
 /**
  * Exports a clean, UTF-8 encoded CSV file suitable for Microsoft Excel and Google Sheets
@@ -43,7 +44,7 @@ export function exportMonthlyCrossCheckCSV(
       const custDeliveries = allDels.filter((del) => del.customerId === c.id);
       const dateMap: Record<string, DayDelivery> = {};
       custDeliveries.forEach((del) => {
-        const key = del.dateKey || '2026-09-09';
+        const key = del.dateKey || getTodayDateKey();
         dateMap[key] = del;
       });
 

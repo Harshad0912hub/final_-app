@@ -6,6 +6,7 @@ import {
   generateMonthlyCrossCheckPDF,
 } from '../utils/pdfGenerator';
 import { exportMonthlyCrossCheckCSV } from '../utils/csvExporter';
+import { getTodayDateKey } from '../utils/dateUtils';
 
 interface ReportsScreenProps {
   customers: Customer[];
@@ -94,13 +95,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   // Deduplicate by dateKey if multiple entries exist
   const dateMap: Record<string, DayDelivery> = {};
   customerDeliveryEntries.forEach((del) => {
-    const key = del.dateKey || '2026-09-09';
+    const key = del.dateKey || getTodayDateKey();
     dateMap[key] = del;
   });
 
   // Filter deliveries belonging to the selected month
   const monthlyDeliveries = Object.values(dateMap).filter((del) => {
-    const key = del.dateKey || '2026-09-09';
+    const key = del.dateKey || getTodayDateKey();
     return key.startsWith(activeMonthPrefix);
   });
 
@@ -587,7 +588,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         ) : (
           <div className="flex flex-col gap-2 mt-1">
             {deliveryList.map((dayItem, idx) => {
-              const dateObj = dayItem.dateKey ? new Date(dayItem.dateKey) : new Date(2026, 8, 9);
+              const dateObj = dayItem.dateKey ? new Date(dayItem.dateKey) : new Date();
               const dayTiffins =
                 (dayItem.morning?.status === 'delivered' ? 1 : 0) +
                 (dayItem.evening?.status === 'delivered' ? 1 : 0);

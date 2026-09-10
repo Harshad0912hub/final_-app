@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useLanguage } from '../utils/LanguageContext';
 
 interface HeaderProps {
@@ -10,6 +10,10 @@ interface HeaderProps {
   isCloudSynced?: boolean;
   theme?: 'light' | 'dark';
   onToggleTheme?: () => void;
+  largeText?: boolean;
+  onToggleLargeText?: () => void;
+  onExportBackup?: () => void;
+  onImportBackup?: (file: File) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,15 +25,39 @@ export const Header: React.FC<HeaderProps> = ({
   isCloudSynced = true,
   theme = 'light',
   onToggleTheme,
+  largeText = false,
+  onToggleLargeText,
+  onExportBackup,
+  onImportBackup,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
+  const restoreInputRef = useRef<HTMLInputElement>(null);
   const { language, toggleLanguage, t, formatNum } = useLanguage();
 
   const handleConfirmClear = () => {
     setShowConfirmModal(false);
     setShowMenu(false);
     if (onClearAllData) onClearAllData();
+  };
+
+  const handleRestoreFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPendingRestoreFile(file);
+    setShowRestoreConfirm(true);
+  };
+
+  const handleConfirmRestore = () => {
+    setShowRestoreConfirm(false);
+    setShowMenu(false);
+    if (pendingRestoreFile && onImportBackup) {
+      onImportBackup(pendingRestoreFile);
+    }
+    setPendingRestoreFile(null);
   };
 
   return (
@@ -137,6 +165,31 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                     )}
 
+                    {/* Large Text Toggle */}
+                    {onToggleLargeText && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onToggleLargeText();
+                        }}
+                        className="flex items-center justify-between gap-2.5 px-3 py-2 text-left rounded-xl text-[13px] font-semibold text-[#0b1c30] hover:bg-[#eff4ff] active:scale-98 transition-all"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <span className="material-symbols-outlined text-[18px] text-[#a33900]">
+                            text_fields
+                          </span>
+                          <span>{language === 'mr' ? 'मोठा मजकूर' : 'Large Text'}</span>
+                        </span>
+                        <span
+                          className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${
+                            largeText ? 'bg-[#a33900] justify-end' : 'bg-[#dce9ff] justify-start'
+                          }`}
+                        >
+                          <span className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: '#ffffff' }} />
+                        </span>
+                      </button>
+                    )}
+
                     {/* Install App button if not already running standalone */}
                     {!isInstalled && onInstallPWA && (
                       <button
@@ -149,6 +202,35 @@ export const Header: React.FC<HeaderProps> = ({
                       >
                         <span className="material-symbols-outlined text-[18px] text-[#a33900]">install_mobile</span>
                         <span>{language === 'mr' ? 'मोबाईल ॲप इन्स्टॉल करा' : 'Install Mobile App'}</span>
+                      </button>
+                    )}
+
+                    {/* Full Backup Download */}
+                    {onExportBackup && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMenu(false);
+                          onExportBackup();
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-2 text-left rounded-xl text-[13px] font-semibold text-[#0b1c30] hover:bg-[#eff4ff] active:scale-98 transition-all"
+                      >
+                        <span className="material-symbols-outlined text-[18px] text-[#006e2d]">cloud_download</span>
+                        <span>{language === 'mr' ? 'बॅकअप डाऊनलोड करा' : 'Download Backup'}</span>
+                      </button>
+                    )}
+
+                    {/* Full Backup Restore */}
+                    {onImportBackup && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          restoreInputRef.current?.click();
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-2 text-left rounded-xl text-[13px] font-semibold text-[#0b1c30] hover:bg-[#eff4ff] active:scale-98 transition-all"
+                      >
+                        <span className="material-symbols-outlined text-[18px] text-[#006e2d]">cloud_upload</span>
+                        <span>{language === 'mr' ? 'बॅकअप पुनर्संचयित करा' : 'Restore Backup'}</span>
                       </button>
                     )}
 
@@ -170,6 +252,53 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </header>
+
+      {/* Hidden file input for restoring a backup */}
+      <input
+        ref={restoreInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={handleRestoreFileSelected}
+      />
+
+      {/* Restore Backup Confirmation Modal */}
+      {showRestoreConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-xs w-full shadow-2xl border border-[#eff4ff] flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-full bg-[#a33900]/10 flex items-center justify-center text-[#a33900] mb-3">
+              <span className="material-symbols-outlined text-[30px]">cloud_upload</span>
+            </div>
+            <h3 className="font-headline-sm text-[18px] text-[#0b1c30] font-bold mb-1">
+              {language === 'mr' ? 'बॅकअप पुनर्संचयित करायचा?' : 'Restore this backup?'}
+            </h3>
+            <p className="font-body-md text-[13px] text-[#5a4138] mb-5">
+              {language === 'mr'
+                ? 'यामुळे सध्याचे सर्व ग्राहक, डबे नोंदी आणि पेमेंट्स निवडलेल्या बॅकअपने बदलले जातील.'
+                : 'This will replace all current customers, delivery records, and payments with the selected backup.'}
+            </p>
+            <div className="grid grid-cols-2 gap-2 w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRestoreConfirm(false);
+                  setPendingRestoreFile(null);
+                }}
+                className="h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-md text-[13px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                className="h-11 rounded-full bg-[#a33900] text-white font-label-md text-[13px] font-bold hover:bg-[#8d4b00] active:scale-95 transition-all shadow-sm"
+              >
+                {language === 'mr' ? 'पुनर्संचयित करा' : 'Restore'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Clear Data Confirmation Modal */}
       {showConfirmModal && (

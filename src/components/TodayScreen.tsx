@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Customer, DayDelivery } from '../types';
 import { useLanguage } from '../utils/LanguageContext';
+import { formatDateKey, getTodayDateKey } from '../utils/dateUtils';
 
 // Helper: build per-customer WhatsApp delivery message
 function buildWhatsAppMsg(custName: string, session: 'morning' | 'evening', dateFull: string, price: number, language: string): string {
@@ -17,15 +18,9 @@ interface TodayScreenProps {
   onOpenPricePicker: (customer: Customer, session: 'morning' | 'evening', dateKey: string, formattedDateStr?: string) => void;
   onAddFirstCustomer: () => void;
   onBatchMarkSession?: (session: 'morning' | 'evening', dateKey: string) => void;
+  onMarkHoliday?: (dateKey: string) => void;
   onOpenEditModal?: (customer: Customer) => void;
   onDeleteCustomer?: (customerId: string) => void;
-}
-
-export function formatDateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 
 export const TodayScreen: React.FC<TodayScreenProps> = ({
@@ -34,14 +29,16 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   onOpenPricePicker,
   onAddFirstCustomer,
   onBatchMarkSession,
+  onMarkHoliday,
   onOpenEditModal,
   onDeleteCustomer,
 }) => {
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 8, 9)); // 9 Sep 2026
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [filter, setFilter] = useState<'all' | 'pending' | 'done'>('all');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [activeMenuCustomer, setActiveMenuCustomer] = useState<Customer | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [showHolidayConfirm, setShowHolidayConfirm] = useState(false);
   const [showMenuCard, setShowMenuCard] = useState(false);
   const [todaysMenu, setTodaysMenu] = useState<{ morning: string; evening: string }>(() => {
     try {
@@ -72,7 +69,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   };
 
   const handleTodayJump = () => {
-    setCurrentDate(new Date(2026, 8, 9));
+    setCurrentDate(new Date());
   };
 
   const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,7 +117,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
     }
 
     // Lookup delivery for this specific date
-    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
     const mStatus = rec?.morning?.status || 'pending';
     const eStatus = rec?.evening?.status || 'pending';
     const mPrice = rec?.morning?.price ?? cust.ratePerTiffin;
@@ -152,22 +149,22 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   // Pending morning / evening customers (for batch mark)
   const pendingMorningCustomers = activeCustomers.filter((cust) => {
     if (cust.mealTiming !== 'both' && cust.mealTiming !== 'morning') return false;
-    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
     return (rec?.morning?.status || 'pending') === 'pending';
   });
   const pendingEveningCustomers = activeCustomers.filter((cust) => {
     if (cust.mealTiming !== 'both' && cust.mealTiming !== 'night') return false;
-    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
     return (rec?.evening?.status || 'pending') === 'pending';
   });
   const deliveredMorningCustomers = activeCustomers.filter((cust) => {
     if (cust.mealTiming !== 'both' && cust.mealTiming !== 'morning') return false;
-    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
     return rec?.morning?.status === 'delivered';
   });
   const deliveredEveningCustomers = activeCustomers.filter((cust) => {
     if (cust.mealTiming !== 'both' && cust.mealTiming !== 'night') return false;
-    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
     return rec?.evening?.status === 'delivered';
   });
 
@@ -179,7 +176,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
 
   // Filter cards based on applicable meal sessions
   const filteredCustomers = activeCustomers.filter((cust) => {
-    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
     const morningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
     const eveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
 
@@ -198,7 +195,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   });
 
   const pendingCount = activeCustomers.filter((cust) => {
-    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
     const morningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
     const eveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
     const mStatus = rec?.morning?.status || 'pending';
@@ -207,7 +204,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   }).length;
 
   const doneCount = activeCustomers.filter((cust) => {
-    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
     const morningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
     const eveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
     const mStatus = rec?.morning?.status || 'pending';
@@ -420,6 +417,18 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
               </span>
             </button>
           </div>
+
+          {/* Holiday: mark everyone on leave for the day (festivals, business closed etc.) */}
+          {(pendingMorningCustomers.length > 0 || pendingEveningCustomers.length > 0) && (
+            <button
+              type="button"
+              onClick={() => setShowHolidayConfirm(true)}
+              className="mt-2 w-full h-10 rounded-xl flex items-center justify-center gap-1.5 font-label-md text-[12px] font-bold border-2 border-dashed border-[#8d4b00] text-[#8d4b00] hover:bg-[#8d4b00]/10 active:scale-95 transition-all"
+            >
+              <span className="material-symbols-outlined text-[16px]">event_busy</span>
+              <span>{language === 'mr' ? 'आज सर्व सुट्टी (सण/उत्सव)' : "Holiday - Everyone's On Leave Today"}</span>
+            </button>
+          )}
         </section>
       )}
 
@@ -605,7 +614,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         <section className="flex flex-col gap-3 mb-6">
         {filteredCustomers.map((cust) => {
           const recKey = `${dateKey}_${cust.id}`;
-          const record = dayDeliveries[recKey] || (dateKey === '2026-09-09' ? dayDeliveries[cust.id] : undefined);
+          const record = dayDeliveries[recKey] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
           const mRec = record?.morning || { status: 'pending', price: cust.ratePerTiffin };
           const eRec = record?.evening || { status: 'pending', price: cust.ratePerTiffin };
 
@@ -886,6 +895,47 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 className="w-full h-11 rounded-full text-[#5a4138] font-label-md text-[13px] font-medium hover:text-[#0b1c30] transition-colors mt-1"
               >
                 {t('cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Holiday Confirmation Modal */}
+      {showHolidayConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center space-y-3.5 border border-[#eff4ff]">
+            <div className="w-14 h-14 rounded-full bg-[#8d4b00]/10 text-[#8d4b00] flex items-center justify-center shadow-inner">
+              <span className="material-symbols-outlined text-[28px]">event_busy</span>
+            </div>
+            <div>
+              <h4 className="font-headline-sm text-[18px] text-[#0b1c30] font-bold">
+                {language === 'mr' ? 'आजची सर्व सुट्टी नोंदवायची?' : 'Mark everyone on leave today?'}
+              </h4>
+              <p className="font-body-sm text-[13px] text-[#5a4138] mt-1.5 leading-relaxed">
+                {language === 'mr'
+                  ? `${pendingMorningCustomers.length + pendingEveningCustomers.length} प्रलंबित डबे सुट्टी म्हणून नोंदवले जातील. आधीच दिलेले डबे बदलले जाणार नाहीत.`
+                  : `${pendingMorningCustomers.length + pendingEveningCustomers.length} pending tiffins will be marked as leave. Deliveries already recorded today won't be changed.`}
+              </p>
+            </div>
+            <div className="flex gap-2 w-full pt-1">
+              <button
+                type="button"
+                onClick={() => setShowHolidayConfirm(false)}
+                className="flex-1 h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-lg text-[14px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onMarkHoliday?.(dateKey);
+                  setShowHolidayConfirm(false);
+                }}
+                className="flex-1 h-11 rounded-full bg-[#8d4b00] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#6e3900] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[18px]">event_busy</span>
+                <span>{language === 'mr' ? 'होय, सुट्टी नोंदवा' : 'Yes, Mark Leave'}</span>
               </button>
             </div>
           </div>

@@ -237,6 +237,13 @@
 .dark .bg-\[\#ffdad6\]\/60 { background-color: rgba(255, 138, 128, 0.14); }
 .dark .bg-\[\#ffdad6\]\/80 { background-color: rgba(255, 138, 128, 0.18); }
 
+/* Large text / simple mode. Components use fixed px sizes rather than rem, so
+   rescaling the whole app (not just fonts) is the reliable way to make
+   everything bigger - buttons and tap targets included, which also helps. */
+.large-text .app-content {
+  zoom: 1.2;
+}
+
 /* Splash screen (shown before React mounts - see index.html) */
 #app-splash {
   background: linear-gradient(180deg, #fff6ec 0%, #f8f9ff 55%, #eef1ff 100%);

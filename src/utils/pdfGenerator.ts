@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import { Customer, DayDelivery, PaymentRecord } from '../types';
+import { getTodayDateKey } from './dateUtils';
 
 export interface InvoiceMetrics {
   totalTiffins: number;
@@ -288,7 +289,7 @@ export function generateMonthlyCrossCheckPDF(
       );
       const dateMap: Record<string, DayDelivery> = {};
       custDeliveries.forEach((del) => {
-        const key = del.dateKey || '2026-09-09';
+        const key = del.dateKey || getTodayDateKey();
         dateMap[key] = del;
       });
 
