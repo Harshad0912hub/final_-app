@@ -19,6 +19,8 @@ interface HeaderProps {
   unbilledCount?: number;
   pendingDuesEnabled?: boolean;
   onTogglePendingDues?: () => void;
+  notificationCount?: number;
+  onOpenNotifications?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,6 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
   unbilledCount = 0,
   pendingDuesEnabled = true,
   onTogglePendingDues,
+  notificationCount = 0,
+  onOpenNotifications,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -103,6 +107,23 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Notifications Bell */}
+            {onOpenNotifications && (
+              <button
+                type="button"
+                aria-label={language === 'mr' ? 'सूचना' : 'Notifications'}
+                onClick={onOpenNotifications}
+                className="relative w-9 h-9 rounded-full flex items-center justify-center text-[#5a4138] hover:bg-[#eff4ff] active:scale-95 transition-all"
+              >
+                <span className="material-symbols-outlined text-[21px]">notifications</span>
+                {notificationCount > 0 && (
+                  <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-0.5 rounded-full bg-[#ba1a1a] text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                    {notificationCount > 9 ? '9+' : notificationCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Quick Language Toggle Button */}
             <button
               type="button"

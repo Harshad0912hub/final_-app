@@ -55,8 +55,7 @@ import {
   saveBillingSentToFirestore,
   clearFirestoreData,
 } from './firebase';
-import { BillingReminderBanner } from './components/BillingReminderBanner';
-import { PendingDuesBanner } from './components/PendingDuesBanner';
+import { NotificationsScreen } from './components/NotificationsScreen';
 import { getMonthKey } from './utils/dateUtils';
 import { computeCustomerDueForMonth, getPreviousMonthPrefix } from './utils/duesUtils';
 
@@ -420,6 +419,7 @@ export default function App() {
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
   const [paymentToEdit, setPaymentToEdit] = useState<PaymentRecord | null>(null);
   const [showWhatsAppInvoice, setShowWhatsAppInvoice] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [invoiceMetrics, setInvoiceMetrics] = useState({
     totalTiffins: 52,
     totalBill: 3380,
@@ -1224,6 +1224,10 @@ export default function App() {
     }))
     .filter((c) => c.due > 0);
 
+  const isBillingReminderActive = new Date().getDate() >= billingReminderDay && unbilledCustomerCount > 0;
+  const notificationCount =
+    (isBillingReminderActive ? 1 : 0) + (pendingDuesEnabled ? overdueCustomers.length : 0);
+
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
 
   return (
@@ -1247,30 +1251,14 @@ export default function App() {
         unbilledCount={unbilledCustomerCount}
         pendingDuesEnabled={pendingDuesEnabled}
         onTogglePendingDues={handleTogglePendingDues}
+        notificationCount={notificationCount}
+        onOpenNotifications={() => setShowNotifications(true)}
       />
 
       {/* Main Screen Content */}
       <main className="flex-1 flex flex-col relative w-full pt-16 pb-20 px-3 max-w-md mx-auto">
         {/* PWA Install Banner on mobile/desktop browsers */}
         <PWAInstallBanner />
-
-        {/* Monthly billing reminder - shown from the configured day onward until every active customer is billed */}
-        {!showWhatsAppInvoice && (
-          <BillingReminderBanner
-            reminderDay={billingReminderDay}
-            unbilledCount={unbilledCustomerCount}
-            onGoToReports={() => setActiveTab('reports')}
-          />
-        )}
-
-        {/* Pending dues notification - names customers whose last month's bill is still unpaid */}
-        {!showWhatsAppInvoice && (
-          <PendingDuesBanner
-            enabled={pendingDuesEnabled}
-            overdueCustomers={overdueCustomers}
-            onGoToReports={() => setActiveTab('reports')}
-          />
-        )}
 
         {showWhatsAppInvoice && activeCustomerForReports ? (
           <WhatsAppInvoicePreview
@@ -1365,6 +1353,20 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Notifications Center - billing reminder + pending dues, opened via the header bell */}
+      <NotificationsScreen
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        isBillingReminderActive={isBillingReminderActive}
+        unbilledCount={unbilledCustomerCount}
+        pendingDuesEnabled={pendingDuesEnabled}
+        overdueCustomers={overdueCustomers}
+        onGoToReports={() => {
+          setShowNotifications(false);
+          setActiveTab('reports');
+        }}
+      />
 
       {/* Price Picker Bottom Sheet Modal */}
       <PricePickerModal
