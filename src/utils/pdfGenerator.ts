@@ -273,6 +273,19 @@ export function generateSingleInvoicePDF(
   doc.text('Google Pay / PhonePe / UPI: 9823784142 | Shravani Tiffin Center', 20, currentY + 14);
   doc.text('Please verify delivery count before making final settlement.', 20, currentY + 20);
 
+  // Policy Notice: cancellation cutoff times and lost-tiffin liability
+  currentY += 32;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(186, 26, 26);
+  const policyNoticeLines = doc.splitTextToSize(
+    'Note: If you need a tiffin, please inform us before 9:30 AM (morning) and before 5 PM (evening). ' +
+      'If a tiffin box is lost, the customer will be responsible and must pay any applicable charges.',
+    pageWidth - 40
+  );
+  doc.text(policyNoticeLines, 20, currentY);
+  currentY += policyNoticeLines.length * 5;
+
   // Footer Signatures
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);

@@ -84,6 +84,11 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
           .join('\n')}\n`
       : '';
 
+  const policyNoticeMr =
+    'सूचना: डबा हवा असल्यास सकाळी ९:३० च्या आत आणि संध्याकाळी ५ च्या आत कळवावे. डबा हरवल्यास ग्राहक स्वतः जबाबदार राहतील व त्याचे जे काही चार्जेस असतील ते त्यांना भरावे लागतील.';
+  const policyNoticeEn =
+    'Note: If you need a tiffin, please inform us before 9:30 AM (morning) and before 5 PM (evening). If a tiffin box is lost, the customer will be responsible and must pay any applicable charges.';
+
   const defaultInvoiceText =
     language === 'mr'
       ? `श्रावणी टिफीन सेंटर
@@ -96,7 +101,9 @@ ${customer.name} — ${monthStr} (${dietLabel})
 ${leaveLineMr}ऍडव्हान्स पेमेंट: ${formatCurrency(paidAmount)}
 उर्वरित रक्कम: ${formatCurrency(dueAmount)}
 ${noteLinesMr}
-धन्यवाद!`
+धन्यवाद!
+
+⚠️ ${policyNoticeMr}`
       : `Shravani Tiffin Center
 Mob. 9823784142
 
@@ -107,7 +114,9 @@ Total Amount: ${formatCurrency(totalBill)}
 ${leaveLineEn}Advance Paid: ${formatCurrency(paidAmount)}
 Balance Due: ${formatCurrency(dueAmount)}
 ${noteLinesEn}
-Thank you!`;
+Thank you!
+
+⚠️ ${policyNoticeEn}`;
 
   const [invoiceText, setInvoiceText] = useState(defaultInvoiceText);
   const [editText, setEditText] = useState(defaultInvoiceText);
