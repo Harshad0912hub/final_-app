@@ -9,6 +9,9 @@ import {
   deleteDoc,
   writeBatch,
   onSnapshot,
+  query,
+  where,
+  updateDoc,
   type Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
@@ -191,12 +194,19 @@ export async function fetchDeliveriesFromFirestore(): Promise<Record<string, Day
   }
 }
 
+// `sinceDateKey` bounds the live subscription to recent history (e.g. the
+// last ~90 days) instead of the entire delivery history since day one - so
+// its read cost stays flat forever instead of growing every month as more
+// history accumulates. Reports/dues features that need older data fetch it
+// separately, on demand, via fetchCustomerDeliveryHistory below.
 export function subscribeToDeliveries(
-  onData: (deliveries: Record<string, DayDelivery>) => void
+  onData: (deliveries: Record<string, DayDelivery>) => void,
+  sinceDateKey?: string
 ): Unsubscribe {
   const colRef = collection(db, DELIVERIES_COLLECTION);
+  const q = sinceDateKey ? query(colRef, where('dateKey', '>=', sinceDateKey)) : colRef;
   return onSnapshot(
-    colRef,
+    q,
     (snap) => {
       const result: Record<string, DayDelivery> = {};
       snap.forEach((d) => {
@@ -213,6 +223,32 @@ export function subscribeToDeliveries(
     },
     (err) => handleFirestoreError(err, OperationType.LIST, DELIVERIES_COLLECTION)
   );
+}
+
+// One-off (non-live) fetch of a single customer's entire delivery history -
+// used on demand (opening Reports for them, recomputing their running due
+// balance) instead of loading everyone's full history on every app open.
+export async function fetchCustomerDeliveryHistory(customerId: string): Promise<DayDelivery[]> {
+  try {
+    const colRef = collection(db, DELIVERIES_COLLECTION);
+    const q = query(colRef, where('customerId', '==', customerId));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => d.data() as DayDelivery);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, `${DELIVERIES_COLLECTION}/customerId=${customerId}`);
+    return [];
+  }
+}
+
+// Partial update of just a customer's running due balance, so recomputing it
+// doesn't require re-sending (or even knowing) the rest of their profile.
+export async function updateCustomerDueInFirestore(customerId: string, currentDue: number): Promise<void> {
+  try {
+    const docRef = doc(db, CUSTOMERS_COLLECTION, customerId);
+    await updateDoc(docRef, { currentDue, updatedAt: new Date().toISOString() });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${CUSTOMERS_COLLECTION}/${customerId}`);
+  }
 }
 
 // Payments

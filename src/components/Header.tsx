@@ -21,6 +21,7 @@ interface HeaderProps {
   onTogglePendingDues?: () => void;
   notificationCount?: number;
   onOpenNotifications?: () => void;
+  onRecalculateAllDues?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -43,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   onTogglePendingDues,
   notificationCount = 0,
   onOpenNotifications,
+  onRecalculateAllDues,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -268,6 +270,21 @@ export const Header: React.FC<HeaderProps> = ({
                         >
                           <span className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: '#ffffff' }} />
                         </span>
+                      </button>
+                    )}
+
+                    {/* Manual safety net: recompute every customer's due balance from scratch */}
+                    {onRecalculateAllDues && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowMenu(false);
+                          onRecalculateAllDues();
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-2 text-left rounded-xl text-[13px] font-semibold text-[#0b1c30] hover:bg-[#eff4ff] active:scale-98 transition-all"
+                      >
+                        <span className="material-symbols-outlined text-[18px] text-[#a33900]">sync</span>
+                        <span>{language === 'mr' ? 'सर्व ग्राहकांची बाकी पुन्हा मोजा' : "Recalculate All Customers' Dues"}</span>
                       </button>
                     )}
 

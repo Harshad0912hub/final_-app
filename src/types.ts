@@ -19,6 +19,11 @@ export interface Customer {
   status: CustomerStatus;
   deactivatedDate?: string;
   avatarBg: string;
+  // Running "how much do they currently owe" balance, recomputed and saved
+  // whenever a delivery or payment changes for this customer - lets the
+  // Pending Dues notification read one small number instead of scanning
+  // every customer's entire delivery history on every app load.
+  currentDue?: number;
 }
 
 export interface SelectedExtra {

@@ -56,10 +56,17 @@ import {
   subscribeToBillingSent,
   saveBillingSentToFirestore,
   clearFirestoreData,
+  fetchCustomerDeliveryHistory,
+  updateCustomerDueInFirestore,
 } from './firebase';
 import { NotificationsScreen } from './components/NotificationsScreen';
-import { getMonthKey } from './utils/dateUtils';
-import { computeCustomerCumulativeDueThroughMonth } from './utils/duesUtils';
+import { getMonthKey, formatDateKey } from './utils/dateUtils';
+import { computeCustomerDueFromHistory } from './utils/duesUtils';
+
+// How far back the live delivery sync looks by default. Keeps daily reads
+// flat forever instead of growing every month as history accumulates;
+// older months are fetched separately, on demand, when actually needed.
+const DELIVERY_SYNC_WINDOW_DAYS = 90;
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
@@ -236,10 +243,15 @@ export default function App() {
             });
           });
 
+          // Bounded to a rolling recent window (not the entire delivery
+          // history since day one) so this stays cheap forever regardless of
+          // how many years of history accumulate. Older months are fetched
+          // separately, on demand, when Reports is opened for a customer.
+          const deliveriesWindowStart = formatDateKey(new Date(Date.now() - DELIVERY_SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000));
           unsubDeliveries = subscribeToDeliveries((remoteDeliveries) => {
             if (!isMounted) return;
             setDayDeliveries(remoteDeliveries);
-          });
+          }, deliveriesWindowStart);
 
           unsubPayments = subscribeToPayments((remotePayments) => {
             if (!isMounted) return;
@@ -533,6 +545,46 @@ export default function App() {
     saveBillingSentToFirestore(record).catch((err) => console.warn('Billing-sent save to cloud skipped:', err));
   };
 
+  // Recomputes one customer's true running due balance from their own full
+  // delivery history (a bounded, single-customer query - not everyone's
+  // history) and saves it, so the Pending Dues notification can just read
+  // that saved number instead of ever scanning delivery history itself.
+  // Called (fire-and-forget) after anything that could change what a
+  // customer owes: a delivery marked/unmarked, a leave/holiday override, or
+  // a payment added/edited/deleted.
+  // `paymentsOverride` lets callers that just changed `payments` via setState
+  // (whose closure still holds the pre-update array, since React state
+  // updates aren't synchronous) pass the already-known-correct list directly
+  // instead of reading stale state.
+  const recomputeAndSaveCustomerDue = async (customerId: string, paymentsOverride?: PaymentRecord[]) => {
+    try {
+      const cust = customers.find((c) => c.id === customerId);
+      if (!cust) return;
+      const history = await fetchCustomerDeliveryHistory(customerId);
+      const sourcePayments = paymentsOverride ?? payments;
+      const custPayments = sourcePayments.filter((p) => p.customerId === customerId);
+      const due = computeCustomerDueFromHistory(cust, history, custPayments);
+      setCustomers((prev) => prev.map((c) => (c.id === customerId ? { ...c, currentDue: due } : c)));
+      await updateCustomerDueInFirestore(customerId, due);
+    } catch (err) {
+      console.warn('Due recompute skipped:', err);
+    }
+  };
+
+  // Manual safety net: recompute every active customer's currentDue from
+  // scratch. This does read each customer's full delivery history (so it's
+  // a deliberate, occasional action - not something run automatically) but
+  // guarantees the saved balances can never permanently drift from the
+  // truth, whatever the cause.
+  const handleRecalculateAllDues = async () => {
+    triggerToast('सर्व ग्राहकांची बाकी रक्कम पुन्हा मोजत आहे...');
+    const activeCustomers = customers.filter((c) => c.status === 'active');
+    for (const cust of activeCustomers) {
+      await recomputeAndSaveCustomerDue(cust.id);
+    }
+    triggerToast('सर्व ग्राहकांची बाकी रक्कम अद्ययावत झाली!');
+  };
+
   // Handler: Confirm delivery from Price Picker
   const handleConfirmDelivery = (
     price: number,
@@ -584,6 +636,7 @@ export default function App() {
     saveDeliveryToFirestore(custId, updatedDelivery).catch((err) =>
       console.warn('Delivery save to cloud skipped:', err)
     );
+    recomputeAndSaveCustomerDue(custId);
   };
 
   // Handler: Mark leave from Price Picker
@@ -625,6 +678,7 @@ export default function App() {
     saveDeliveryToFirestore(custId, updatedDelivery).catch((err) =>
       console.warn('Delivery save to cloud skipped:', err)
     );
+    recomputeAndSaveCustomerDue(custId);
   };
 
   // Handler: Clear mark from Price Picker
@@ -662,6 +716,7 @@ export default function App() {
     saveDeliveryToFirestore(custId, updatedDelivery).catch((err) =>
       console.warn('Delivery save to cloud skipped:', err)
     );
+    recomputeAndSaveCustomerDue(custId);
   };
 
   // Handler: Batch mark all pending customers for a session as delivered,
@@ -722,6 +777,7 @@ export default function App() {
       saveDeliveryToFirestore(cust.id, updated).catch((err) =>
         console.warn('Batch delivery save to cloud skipped:', err)
       );
+      recomputeAndSaveCustomerDue(cust.id);
     });
 
     if (count > 0) {
@@ -1155,20 +1211,19 @@ export default function App() {
     note: string;
   }) => {
     if (paymentData.id) {
-      setPayments((prev) =>
-        prev.map((p) =>
-          p.id === paymentData.id
-            ? {
-                ...p,
-                amount: paymentData.amount,
-                method: paymentData.method,
-                title: paymentData.title,
-                note: paymentData.note,
-              }
-            : p
-        )
-      );
       const existingPay = payments.find((p) => p.id === paymentData.id);
+      const updatedPayments = payments.map((p) =>
+        p.id === paymentData.id
+          ? {
+              ...p,
+              amount: paymentData.amount,
+              method: paymentData.method,
+              title: paymentData.title,
+              note: paymentData.note,
+            }
+          : p
+      );
+      setPayments(updatedPayments);
       const updatedPayment: PaymentRecord = {
         id: paymentData.id,
         customerId: existingPay?.customerId || selectedCustomerId,
@@ -1182,6 +1237,7 @@ export default function App() {
       savePaymentToFirestore(updatedPayment).catch((err) =>
         console.warn('Payment update to cloud skipped:', err)
       );
+      recomputeAndSaveCustomerDue(updatedPayment.customerId, updatedPayments);
     } else {
       const newPayment: PaymentRecord = {
         id: `pay-${Date.now()}`,
@@ -1192,11 +1248,13 @@ export default function App() {
         title: paymentData.title,
         note: paymentData.note,
       };
-      setPayments((prev) => [newPayment, ...prev]);
+      const updatedPayments = [newPayment, ...payments];
+      setPayments(updatedPayments);
       triggerToast(`₹${paymentData.amount} ॲडव्हान्स जमा नोंदवले!`);
       savePaymentToFirestore(newPayment).catch((err) =>
         console.warn('Payment save to cloud skipped:', err)
       );
+      recomputeAndSaveCustomerDue(newPayment.customerId, updatedPayments);
     }
     setPaymentToEdit(null);
   };
@@ -1204,11 +1262,15 @@ export default function App() {
   // Handler: Delete Payment
   const handleDeletePayment = (paymentId: string) => {
     const payToDelete = payments.find((p) => p.id === paymentId);
-    setPayments((prev) => prev.filter((p) => p.id !== paymentId));
+    const updatedPayments = payments.filter((p) => p.id !== paymentId);
+    setPayments(updatedPayments);
     triggerToast(`₹${payToDelete?.amount || ''} पेमेंट नोंद हटवली.`);
     deletePaymentFromFirestore(paymentId).catch((err) =>
       console.warn('Payment delete from cloud skipped:', err)
     );
+    if (payToDelete) {
+      recomputeAndSaveCustomerDue(payToDelete.customerId, updatedPayments);
+    }
   };
 
   // Active customer for modals
@@ -1225,18 +1287,13 @@ export default function App() {
     (c) => c.status === 'active' && !billedCustomerIdsThisMonth.has(c.id)
   ).length;
 
-  // Customers with a current outstanding balance (all delivered bills to
-  // date minus all payments to date) - a running total, not scoped to a
-  // single "last month" window, so it stays accurate from day one.
-  const dueAsOfMonthKey = getMonthKey();
+  // Customers with a current outstanding balance. Reads each customer's
+  // precomputed `currentDue` (kept up to date after every delivery/payment
+  // change) instead of scanning delivery history here, so this stays cheap
+  // regardless of how many years of history have accumulated.
   const overdueCustomers = customers
-    .filter((c) => c.status === 'active')
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      due: computeCustomerCumulativeDueThroughMonth(c, dayDeliveries, payments, dueAsOfMonthKey),
-    }))
-    .filter((c) => c.due > 0);
+    .filter((c) => c.status === 'active' && (c.currentDue ?? 0) > 0)
+    .map((c) => ({ id: c.id, name: c.name, due: c.currentDue ?? 0 }));
 
   const isBillingReminderActive = new Date().getDate() >= billingReminderDay && unbilledCustomerCount > 0;
   const notificationCount =
@@ -1267,6 +1324,7 @@ export default function App() {
         onTogglePendingDues={handleTogglePendingDues}
         notificationCount={notificationCount}
         onOpenNotifications={() => setShowNotifications(true)}
+        onRecalculateAllDues={handleRecalculateAllDues}
       />
 
       {/* Main Screen Content */}
