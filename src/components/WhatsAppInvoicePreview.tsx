@@ -11,6 +11,8 @@ interface WhatsAppInvoicePreviewProps {
   dueAmount: number;
   monthStr: string;
   payments?: PaymentRecord[];
+  totalLeaveDays?: number;
+  leaveDateKeys?: string[];
   onBack: () => void;
 }
 
@@ -22,6 +24,8 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
   dueAmount,
   monthStr,
   payments = [],
+  totalLeaveDays = 0,
+  leaveDateKeys = [],
   onBack,
 }) => {
   const { language, t, formatNum, formatCurrency } = useLanguage();
@@ -34,6 +38,24 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
       ? (language === 'mr' ? 'मांसाहारी' : 'Non-Veg')
       : (language === 'mr' ? 'शाकाहारी' : 'Pure Veg');
 
+  const monthNamesMr = ['जाने', 'फेब्रु', 'मार्च', 'एप्रि', 'मे', 'जून', 'जुलै', 'ऑग', 'सप्टें', 'ऑक्टो', 'नोव्हें', 'डिसें'];
+  const monthNamesEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const formatLeaveDateKey = (key: string): string => {
+    const [, m, d] = key.split('-').map(Number);
+    const months = language === 'mr' ? monthNamesMr : monthNamesEn;
+    return `${Number(d)} ${months[m - 1] || ''}`.trim();
+  };
+
+  const leaveDatesStr = leaveDateKeys.map(formatLeaveDateKey).join(', ');
+  const leaveLineMr =
+    totalLeaveDays > 0
+      ? `सुट्टीचे दिवस: ${formatNum(totalLeaveDays)}${leaveDatesStr ? ` (${leaveDatesStr})` : ''} - बिल आकारले नाही\n`
+      : '';
+  const leaveLineEn =
+    totalLeaveDays > 0
+      ? `Leave Days: ${formatNum(totalLeaveDays)}${leaveDatesStr ? ` (${leaveDatesStr})` : ''} - not charged\n`
+      : '';
+
   const defaultInvoiceText =
     language === 'mr'
       ? `श्रावणी टिफीन सेंटर
@@ -43,7 +65,7 @@ ${customer.name} — ${monthStr} (${dietLabel})
 
 एकुण टिफीन: ${formatNum(totalTiffins)}
 एकुण रक्कम: ${formatCurrency(totalBill)}
-ऍडव्हान्स पेमेंट: ${formatCurrency(paidAmount)}
+${leaveLineMr}ऍडव्हान्स पेमेंट: ${formatCurrency(paidAmount)}
 उर्वरित रक्कम: ${formatCurrency(dueAmount)}
 
 धन्यवाद!`
@@ -54,7 +76,7 @@ ${customer.name} — ${monthStr} (${dietLabel})
 
 Total Tiffins: ${formatNum(totalTiffins)}
 Total Amount: ${formatCurrency(totalBill)}
-Advance Paid: ${formatCurrency(paidAmount)}
+${leaveLineEn}Advance Paid: ${formatCurrency(paidAmount)}
 Balance Due: ${formatCurrency(dueAmount)}
 
 Thank you!`;
@@ -221,6 +243,25 @@ Thank you!`;
           </div>
         </div>
       </div>
+
+      {/* Leave Days Note - so the customer clearly sees why some days weren't charged */}
+      {totalLeaveDays > 0 && (
+        <div className="mt-2.5 bg-[#ffdcc3]/50 rounded-2xl p-3 flex items-start gap-2 border border-[#ffdcc3]">
+          <span className="material-symbols-outlined text-[18px] text-[#8d4b00] shrink-0 mt-0.5">
+            flight_takeoff
+          </span>
+          <div className="min-w-0">
+            <p className="font-label-md text-[12px] text-[#6e3900] font-bold">
+              {language === 'mr'
+                ? `${formatNum(totalLeaveDays)} सुट्टीचे दिवस - बिल आकारले नाही`
+                : `${formatNum(totalLeaveDays)} Leave Days - not charged`}
+            </p>
+            {leaveDatesStr && (
+              <p className="font-body-sm text-[11px] text-[#8d4b00] mt-0.5">{leaveDatesStr}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* WhatsApp Authentic Chat Canvas & Message Bubble */}
       <div className="mt-4">

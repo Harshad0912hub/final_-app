@@ -7,6 +7,15 @@ export interface InvoiceMetrics {
   totalBill: number;
   paidAmount: number;
   dueAmount: number;
+  totalLeaveDays?: number;
+  leaveDateKeys?: string[];
+}
+
+const PDF_MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatDateKeyForPDF(key: string): string {
+  const [, m, d] = key.split('-').map(Number);
+  return `${d} ${PDF_MONTH_ABBREV[m - 1] || ''}`.trim();
 }
 
 /**
@@ -157,7 +166,27 @@ export function generateSingleInvoicePDF(
   doc.text(`${metrics.totalTiffins}`, pageWidth - 50, currentY + 7, { align: 'right' });
   doc.text(`Rs. ${metrics.totalBill.toLocaleString('en-IN')}`, pageWidth - 20, currentY + 7, { align: 'right' });
 
-  currentY += 12;
+  const hasLeaveDays = (metrics.totalLeaveDays ?? 0) > 0;
+  if (hasLeaveDays) {
+    currentY += 8;
+    doc.setTextColor(141, 75, 0); // brownish accent, matches the app's holiday/leave color
+    doc.text('Leave Days (not charged)', 20, currentY + 7);
+    doc.text('-', pageWidth - 80, currentY + 7, { align: 'right' });
+    doc.text(`${metrics.totalLeaveDays}`, pageWidth - 50, currentY + 7, { align: 'right' });
+    doc.text('Rs. 0', pageWidth - 20, currentY + 7, { align: 'right' });
+
+    if (metrics.leaveDateKeys && metrics.leaveDateKeys.length > 0) {
+      currentY += 6;
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(120, 90, 60);
+      const dateList = metrics.leaveDateKeys.map(formatDateKeyForPDF).join(', ');
+      doc.text(`Leave dates: ${dateList}`, 20, currentY + 6, { maxWidth: pageWidth - 40 });
+      doc.setFont('helvetica', 'normal');
+    }
+  }
+
+  currentY += hasLeaveDays ? 18 : 12;
   doc.line(14, currentY, pageWidth - 14, currentY);
 
   // Financial Breakdown Box

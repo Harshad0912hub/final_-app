@@ -4,8 +4,10 @@ import { useLanguage } from '../utils/LanguageContext';
 import { formatDateKey, getTodayDateKey } from '../utils/dateUtils';
 
 // Helper: build the WhatsApp holiday-announcement message for one customer
+// A generic (not per-customer) holiday announcement, meant to be copied or
+// shared once - e.g. into a WhatsApp broadcast list, group, or status -
+// rather than sent to each customer one at a time.
 function buildHolidayBroadcastMsg(
-  custName: string,
   reason: string,
   fromStr: string,
   toStr: string,
@@ -14,12 +16,12 @@ function buildHolidayBroadcastMsg(
 ): string {
   if (language === 'mr') {
     return sameDay
-      ? `नमस्कार ${custName}जी! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${reason} निमित्त आज (${fromStr}) आमचे टिफीन सेंटर बंद राहील.\nगैरसोयीबद्दल दिलगीर आहोत. धन्यवाद! 🙏`
-      : `नमस्कार ${custName}जी! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${reason} निमित्त ${fromStr} ते ${toStr} या कालावधीत आमचे टिफीन सेंटर बंद राहील.\nगैरसोयीबद्दल दिलगीर आहोत. धन्यवाद! 🙏`;
+      ? `नमस्कार! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${reason} निमित्त आज (${fromStr}) आमचे टिफीन सेंटर बंद राहील.\nगैरसोयीबद्दल दिलगीर आहोत. धन्यवाद! 🙏`
+      : `नमस्कार! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${reason} निमित्त ${fromStr} ते ${toStr} या कालावधीत आमचे टिफीन सेंटर बंद राहील.\nगैरसोयीबद्दल दिलगीर आहोत. धन्यवाद! 🙏`;
   }
   return sameDay
-    ? `Hello ${custName}! 🙏\n*Shravani Tiffin Center*\n\nDue to ${reason}, our tiffin center will remain closed today (${fromStr}).\nSorry for the inconvenience. Thank you! 🙏`
-    : `Hello ${custName}! 🙏\n*Shravani Tiffin Center*\n\nDue to ${reason}, our tiffin center will remain closed from ${fromStr} to ${toStr}.\nSorry for the inconvenience. Thank you! 🙏`;
+    ? `Hello! 🙏\n*Shravani Tiffin Center*\n\nDue to ${reason}, our tiffin center will remain closed today (${fromStr}).\nSorry for the inconvenience. Thank you! 🙏`
+    : `Hello! 🙏\n*Shravani Tiffin Center*\n\nDue to ${reason}, our tiffin center will remain closed from ${fromStr} to ${toStr}.\nSorry for the inconvenience. Thank you! 🙏`;
 }
 
 // Helper: build per-customer WhatsApp delivery message
@@ -59,7 +61,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   onDeleteCustomer,
 }) => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [filter, setFilter] = useState<'all' | 'pending' | 'done'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'done' | 'leave'>('all');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [activeMenuCustomer, setActiveMenuCustomer] = useState<Customer | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
@@ -72,7 +74,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   } | null>(null);
   const [holidayToCancel, setHolidayToCancel] = useState<Holiday | null>(null);
   const [broadcastHoliday, setBroadcastHoliday] = useState<Holiday | null>(null);
-  const [broadcastIndex, setBroadcastIndex] = useState(0);
+  const [broadcastCopied, setBroadcastCopied] = useState(false);
   const [showMenuCard, setShowMenuCard] = useState(false);
   const [todaysMenu, setTodaysMenu] = useState<{ morning: string; evening: string }>(() => {
     try {
@@ -236,9 +238,14 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
     const isDone = mDone && eDone;
 
     const hasPending = (morningApplicable && mStatus === 'pending') || (eveningApplicable && eStatus === 'pending');
+    const isOnLeave =
+      (!morningApplicable || mStatus === 'leave') &&
+      (!eveningApplicable || eStatus === 'leave') &&
+      (morningApplicable || eveningApplicable);
 
     if (filter === 'pending') return hasPending;
     if (filter === 'done') return isDone;
+    if (filter === 'leave') return isOnLeave;
     return true;
   });
 
@@ -259,6 +266,17 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
     const eStatus = rec?.evening?.status || 'pending';
     return (!morningApplicable || mStatus === 'delivered' || mStatus === 'leave') &&
            (!eveningApplicable || eStatus === 'delivered' || eStatus === 'leave');
+  }).length;
+
+  const leaveCount = activeCustomers.filter((cust) => {
+    const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
+    const morningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
+    const eveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
+    const mStatus = rec?.morning?.status || 'pending';
+    const eStatus = rec?.evening?.status || 'pending';
+    return (!morningApplicable || mStatus === 'leave') &&
+           (!eveningApplicable || eStatus === 'leave') &&
+           (morningApplicable || eveningApplicable);
   }).length;
 
   return (
@@ -435,12 +453,18 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
               }`}
             >
               <span className="material-symbols-outlined text-[17px]">
-                {pendingMorningCustomers.length > 0 ? 'done_all' : 'undo'}
+                {pendingMorningCustomers.length > 0
+                  ? 'done_all'
+                  : deliveredMorningCustomers.length > 0
+                  ? 'undo'
+                  : 'check_circle'}
               </span>
               <span>
                 {pendingMorningCustomers.length > 0
                   ? (language === 'mr' ? `सकाळचे सर्व दिले (${pendingMorningCustomers.length})` : `All Morning Done (${pendingMorningCustomers.length})`)
-                  : (language === 'mr' ? `सकाळचे पूर्ववत करा (${deliveredMorningCustomers.length})` : `Undo Morning (${deliveredMorningCustomers.length})`)}
+                  : deliveredMorningCustomers.length > 0
+                  ? (language === 'mr' ? `सकाळचे पूर्ववत करा (${deliveredMorningCustomers.length})` : `Undo Morning (${deliveredMorningCustomers.length})`)
+                  : (language === 'mr' ? 'सकाळचे काही प्रलंबित नाही' : 'Nothing Pending (Morning)')}
               </span>
             </button>
             <button
@@ -456,12 +480,18 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
               }`}
             >
               <span className="material-symbols-outlined text-[17px]">
-                {pendingEveningCustomers.length > 0 ? 'done_all' : 'undo'}
+                {pendingEveningCustomers.length > 0
+                  ? 'done_all'
+                  : deliveredEveningCustomers.length > 0
+                  ? 'undo'
+                  : 'check_circle'}
               </span>
               <span>
                 {pendingEveningCustomers.length > 0
                   ? (language === 'mr' ? `रात्रीचे सर्व दिले (${pendingEveningCustomers.length})` : `All Evening Done (${pendingEveningCustomers.length})`)
-                  : (language === 'mr' ? `रात्रीचे पूर्ववत करा (${deliveredEveningCustomers.length})` : `Undo Evening (${deliveredEveningCustomers.length})`)}
+                  : deliveredEveningCustomers.length > 0
+                  ? (language === 'mr' ? `रात्रीचे पूर्ववत करा (${deliveredEveningCustomers.length})` : `Undo Evening (${deliveredEveningCustomers.length})`)
+                  : (language === 'mr' ? 'रात्रीचे काही प्रलंबित नाही' : 'Nothing Pending (Evening)')}
               </span>
             </button>
           </div>
@@ -508,8 +538,8 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    setBroadcastCopied(false);
                     setBroadcastHoliday(holidayForViewedDay);
-                    setBroadcastIndex(0);
                   }}
                   className="h-9 rounded-lg bg-[#25D366] text-white font-label-sm text-[11px] font-bold hover:bg-[#1EBE5D] active:scale-95 transition-all flex items-center justify-center gap-1"
                 >
@@ -669,6 +699,21 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             <span className="material-symbols-outlined text-[16px] text-[#006e2d]">check_circle</span>
             <span>{t('filterDone')} ({formatNum(doneCount)})</span>
           </button>
+
+          {leaveCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilter('leave')}
+              className={`px-3.5 py-1.5 rounded-full font-label-md text-[12px] flex items-center gap-1 whitespace-nowrap transition-transform active:scale-95 ${
+                filter === 'leave'
+                  ? 'bg-[#a33900] text-white shadow-sm font-bold'
+                  : 'bg-[#ffffff] text-[#5a4138] border border-[#eff4ff]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px] text-[#8d4b00]">flight_takeoff</span>
+              <span>{language === 'mr' ? 'सुट्टीवर' : 'On Leave'} ({formatNum(leaveCount)})</span>
+            </button>
+          )}
         </div>
       </section>
 
@@ -719,6 +764,13 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           const mRec = record?.morning || { status: 'pending', price: cust.ratePerTiffin };
           const eRec = record?.evening || { status: 'pending', price: cust.ratePerTiffin };
 
+          const cardMorningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
+          const cardEveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
+          const isOnLeaveToday =
+            (!cardMorningApplicable || mRec.status === 'leave') &&
+            (!cardEveningApplicable || eRec.status === 'leave') &&
+            (cardMorningApplicable || cardEveningApplicable);
+
           // WhatsApp delivery message link builder
           const buildWALink = (session: 'morning' | 'evening', price: number) => {
             const msg = buildWhatsAppMsg(cust.name, session, dateFull, price, language);
@@ -757,6 +809,12 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                           ? (language === 'mr' ? 'मांसाहारी' : 'Non-Veg')
                           : (language === 'mr' ? 'शाकाहारी' : 'Veg')}
                       </span>
+                      {isOnLeaveToday && (
+                        <span className="font-label-sm text-[10px] px-1.5 py-0.5 rounded font-bold bg-[#ffdcc3] text-[#6e3900] flex items-center gap-0.5">
+                          <span className="material-symbols-outlined text-[11px]">flight_takeoff</span>
+                          {language === 'mr' ? 'सुट्टीवर' : 'On Leave'}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <a
@@ -1132,14 +1190,12 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         </div>
       )}
 
-      {/* WhatsApp Holiday Broadcast Modal */}
+      {/* WhatsApp Holiday Broadcast Modal - one message, sent however you like */}
       {broadcastHoliday && (() => {
-        const broadcastList = activeCustomers;
-        const total = broadcastList.length;
-        const current = broadcastList[broadcastIndex];
         const sameDay = broadcastHoliday.fromDateKey === broadcastHoliday.toDateKey;
         const fromStr = formatDate(parseDateKeyToDate(broadcastHoliday.fromDateKey)).dateFull;
         const toStr = formatDate(parseDateKeyToDate(broadcastHoliday.toDateKey)).dateFull;
+        const msg = buildHolidayBroadcastMsg(broadcastHoliday.reason, fromStr, toStr, sameDay, language);
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
@@ -1147,60 +1203,61 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
               <div className="w-14 h-14 rounded-full bg-[#25D366]/15 text-[#1EBE5D] flex items-center justify-center shadow-inner">
                 <span className="material-symbols-outlined text-[28px]">chat</span>
               </div>
-              {total === 0 ? (
-                <p className="font-body-md text-[13px] text-[#5a4138]">
-                  {language === 'mr' ? 'कोणतेही सक्रिय ग्राहक नाहीत.' : 'No active customers.'}
+              <div>
+                <h4 className="font-headline-sm text-[18px] text-[#0b1c30] font-bold">
+                  {language === 'mr' ? 'सुट्टीचा निरोप' : 'Holiday Notice'}
+                </h4>
+                <p className="font-body-sm text-[12px] text-[#5a4138] mt-1">
+                  {language === 'mr'
+                    ? 'हा संदेश कॉपी करा किंवा तुमच्या स्वतःच्या WhatsApp ब्रॉडकास्ट लिस्ट / ग्रुपमध्ये पाठवा.'
+                    : 'Copy this message or send it via your own WhatsApp broadcast list / group.'}
                 </p>
-              ) : (
-                <>
-                  <div>
-                    <h4 className="font-headline-sm text-[18px] text-[#0b1c30] font-bold">
-                      {language === 'mr' ? 'सुट्टीचा निरोप पाठवा' : 'Send Holiday Notice'}
-                    </h4>
-                    <p className="font-label-sm text-[11px] text-[#5a4138] mt-1">
-                      {language === 'mr' ? 'ग्राहक' : 'Customer'} {broadcastIndex + 1} / {total}
-                    </p>
-                  </div>
-                  <div className="w-full bg-[#eff4ff] rounded-xl p-3">
-                    <p className="font-headline-sm text-[15px] text-[#0b1c30] font-bold">{current.name}</p>
-                    <p className="font-body-sm text-[12px] text-[#5a4138]">+91 {current.phone}</p>
-                  </div>
-                  <div className="flex gap-2 w-full pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setBroadcastHoliday(null)}
-                      className="flex-1 h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-lg text-[14px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
-                    >
-                      {language === 'mr' ? 'बंद करा' : 'Close'}
-                    </button>
-                    <a
-                      href={`https://wa.me/91${current.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                        buildHolidayBroadcastMsg(current.name, broadcastHoliday.reason, fromStr, toStr, sameDay, language)
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => {
-                        if (broadcastIndex < total - 1) {
-                          setTimeout(() => setBroadcastIndex((i) => i + 1), 400);
-                        }
-                      }}
-                      className="flex-1 h-11 rounded-full bg-[#25D366] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#1EBE5D] active:scale-95 transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">chat</span>
-                      <span>{language === 'mr' ? 'WhatsApp उघडा' : 'Open WhatsApp'}</span>
-                    </a>
-                  </div>
-                  {broadcastIndex < total - 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setBroadcastIndex((i) => i + 1)}
-                      className="w-full h-9 rounded-full text-[#5a4138] font-label-sm text-[12px] font-semibold hover:bg-[#eff4ff] active:scale-95 transition-all"
-                    >
-                      {language === 'mr' ? 'हा ग्राहक वगळा, पुढे जा →' : 'Skip this customer, next →'}
-                    </button>
-                  )}
-                </>
-              )}
+              </div>
+              <div className="w-full bg-[#eff4ff] rounded-xl p-3 text-left">
+                <pre className="font-body-sm text-[13px] text-[#0b1c30] whitespace-pre-wrap font-sans">{msg}</pre>
+              </div>
+              <div className="flex gap-2 w-full pt-1">
+                <button
+                  type="button"
+                  onClick={() => setBroadcastHoliday(null)}
+                  className="flex-1 h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-lg text-[14px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
+                >
+                  {language === 'mr' ? 'बंद करा' : 'Close'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(msg);
+                      setBroadcastCopied(true);
+                      setTimeout(() => setBroadcastCopied(false), 2000);
+                    } catch {
+                      // ignore - clipboard may be unavailable
+                    }
+                  }}
+                  className={`flex-1 h-11 rounded-full font-label-lg text-[14px] font-bold shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 ${
+                    broadcastCopied ? 'bg-[#7cf994] text-[#007230]' : 'bg-[#eff4ff] text-[#0b1c30] hover:bg-[#dce9ff]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    {broadcastCopied ? 'done' : 'content_copy'}
+                  </span>
+                  <span>
+                    {broadcastCopied
+                      ? (language === 'mr' ? 'कॉपी झाले!' : 'Copied!')
+                      : (language === 'mr' ? 'कॉपी करा' : 'Copy')}
+                  </span>
+                </button>
+              </div>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(msg)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full h-11 rounded-full bg-[#25D366] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#1EBE5D] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[18px]">chat</span>
+                <span>{language === 'mr' ? 'WhatsApp उघडा' : 'Open WhatsApp'}</span>
+              </a>
             </div>
           </div>
         );

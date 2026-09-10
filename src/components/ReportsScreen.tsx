@@ -23,6 +23,8 @@ interface ReportsScreenProps {
     totalBill: number;
     paidAmount: number;
     dueAmount: number;
+    totalLeaveDays: number;
+    leaveDateKeys: string[];
   }) => void;
 }
 
@@ -113,6 +115,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   let totalTiffins = 0;
   let totalLeaveDays = 0;
   let totalBill = 0;
+  const leaveDateKeys: string[] = [];
 
   deliveryList.forEach((del) => {
     let dayLeaves = 0;
@@ -132,8 +135,12 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
     if (dayLeaves > 0) {
       totalLeaveDays++;
+      if (del.dateKey) leaveDateKeys.push(del.dateKey);
     }
   });
+
+  // Oldest first, for a readable list in the invoice
+  leaveDateKeys.sort();
 
   const dueAmount = Math.max(0, totalBill - totalPaid);
 
@@ -388,6 +395,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               totalBill,
               paidAmount: totalPaid,
               dueAmount,
+              totalLeaveDays,
+              leaveDateKeys,
             })
           }
           className="w-full min-h-[50px] bg-[#25D366] hover:bg-[#1EBE5D] active:bg-[#1bb354] text-white p-3 rounded-2xl shadow-sm flex items-center justify-between transition-transform active:scale-[0.99]"
@@ -419,6 +428,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 totalBill,
                 paidAmount: totalPaid,
                 dueAmount,
+                totalLeaveDays,
+                leaveDateKeys,
               },
               filteredPayments
             )

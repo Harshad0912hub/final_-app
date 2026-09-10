@@ -329,6 +329,8 @@ export default function App() {
     totalBill: 3380,
     paidAmount: 2280,
     dueAmount: 1100,
+    totalLeaveDays: 0,
+    leaveDateKeys: [] as string[],
   });
 
   // Global toast feedback
@@ -1074,6 +1076,8 @@ export default function App() {
             totalBill={invoiceMetrics.totalBill}
             paidAmount={invoiceMetrics.paidAmount}
             dueAmount={invoiceMetrics.dueAmount}
+            totalLeaveDays={invoiceMetrics.totalLeaveDays}
+            leaveDateKeys={invoiceMetrics.leaveDateKeys}
             monthStr={getMarathiMonthYearStr()}
             payments={payments}
             onBack={() => setShowWhatsAppInvoice(false)}
