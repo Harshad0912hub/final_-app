@@ -290,20 +290,11 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                         <h4 className="font-headline-sm text-[16px] text-[#0b1c30] font-bold leading-snug truncate">
                           {cust.name}
                         </h4>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#7cf994] text-[#007230]">
-                          {t('statusActive')}
-                        </span>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            cust.dietType === 'non-veg'
-                              ? 'bg-[#ffcdd2] text-[#b71c1c]'
-                              : 'bg-[#c8e6c9] text-[#1b5e20]'
-                          }`}
-                        >
-                          {cust.dietType === 'non-veg'
-                            ? (language === 'mr' ? 'मांसाहारी' : 'Non-Veg')
-                            : (language === 'mr' ? 'शाकाहारी' : 'Veg')}
-                        </span>
+                        {cust.dietType === 'non-veg' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#ffcdd2] text-[#b71c1c]">
+                            {language === 'mr' ? 'मांसाहारी' : 'Non-Veg'}
+                          </span>
+                        )}
                         {leaveRangeByCustomerId[cust.id] && (
                           <button
                             type="button"
@@ -329,9 +320,9 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                       </div>
                       <a
                         href={`tel:${cust.phone}`}
-                        className="inline-flex items-center gap-1 text-[#007230] font-label-md text-[13px] font-semibold mt-0.5 active:opacity-75"
+                        className="inline-flex items-center gap-1 text-[#5a4138] font-body-sm text-[12px] mt-0.5 active:text-[#a33900]"
                       >
-                        <span className="material-symbols-outlined text-[16px]">call</span>
+                        <span className="material-symbols-outlined text-[14px]">call</span>
                         <span>{language === 'mr' ? `मो. ${cust.phone}` : `Mob. ${cust.phone}`}</span>
                       </a>
                       <p className="font-body-sm text-[12px] text-[#5a4138] mt-0.5 flex items-center gap-1 line-clamp-1">
@@ -507,14 +498,9 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                       {cust.initial}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="font-headline-sm text-[15px] text-[#5a4138] font-bold truncate">
-                          {cust.name}
-                        </h4>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#cbdbf5] text-[#5a4138]">
-                          {t('statusInactive')}
-                        </span>
-                      </div>
+                      <h4 className="font-headline-sm text-[15px] text-[#5a4138] font-bold truncate">
+                        {cust.name}
+                      </h4>
                       <p className="font-body-sm text-[12px] text-[#5a4138]">
                         {language === 'mr' ? `मो. ${cust.phone}` : `Mob. ${cust.phone}`}
                       </p>

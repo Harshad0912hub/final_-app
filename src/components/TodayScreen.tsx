@@ -796,20 +796,11 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                       <h4 className="font-headline-sm text-[16px] text-[#0b1c30] font-bold truncate">
                         {cust.name}
                       </h4>
-                      <span className="bg-[#dce9ff] text-[#5a4138] font-label-sm text-[10px] px-1.5 py-0.5 rounded font-medium">
-                        {cust.shortAddress}
-                      </span>
-                      <span
-                        className={`font-label-sm text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                          cust.dietType === 'non-veg'
-                            ? 'bg-[#ffcdd2] text-[#b71c1c]'
-                            : 'bg-[#c8e6c9] text-[#1b5e20]'
-                        }`}
-                      >
-                        {cust.dietType === 'non-veg'
-                          ? (language === 'mr' ? 'मांसाहारी' : 'Non-Veg')
-                          : (language === 'mr' ? 'शाकाहारी' : 'Veg')}
-                      </span>
+                      {cust.dietType === 'non-veg' && (
+                        <span className="font-label-sm text-[10px] px-1.5 py-0.5 rounded font-bold bg-[#ffcdd2] text-[#b71c1c]">
+                          {language === 'mr' ? 'मांसाहारी' : 'Non-Veg'}
+                        </span>
+                      )}
                       {cardLeaveRange && (
                         <span className="font-label-sm text-[10px] px-1.5 py-0.5 rounded font-bold bg-[#ffdcc3] text-[#6e3900] flex items-center gap-0.5">
                           <span className="material-symbols-outlined text-[11px]">flight_takeoff</span>
@@ -827,14 +818,19 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                         <span>{cust.phone}</span>
                       </a>
                       <span className="text-[#e2bfb2] font-body-sm">•</span>
-                      <span
-                        className={`font-body-sm text-[12px] truncate ${
+                      <span className="font-body-sm text-[12px] text-[#5a4138] truncate">
+                        {cust.shortAddress}
+                      </span>
+                    </div>
+                    {cust.specialNote && (
+                      <p
+                        className={`font-body-sm text-[12px] mt-0.5 truncate ${
                           cust.specialNote.includes('खास') ? 'text-[#a33900] font-semibold' : 'text-[#5a4138]'
                         }`}
                       >
                         {cust.specialNote}
-                      </span>
-                    </div>
+                      </p>
+                    )}
                   </div>
                 </div>
 
