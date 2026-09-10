@@ -105,6 +105,25 @@ export async function deleteCustomerFromFirestore(customerId: string): Promise<v
   }
 }
 
+// Deletes every daily_deliveries doc belonging to a customer - called
+// alongside deleteCustomerFromFirestore so a deleted customer's delivery
+// history doesn't linger in the database forever.
+export async function deleteCustomerDeliveriesFromFirestore(customerId: string): Promise<void> {
+  try {
+    const colRef = collection(db, DELIVERIES_COLLECTION);
+    const snap = await getDocs(colRef);
+    const batch = writeBatch(db);
+    snap.forEach((d) => {
+      if ((d.data() as DayDelivery).customerId === customerId) {
+        batch.delete(d.ref);
+      }
+    });
+    await batch.commit();
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${DELIVERIES_COLLECTION}/customerId=${customerId}`);
+  }
+}
+
 export async function fetchCustomersFromFirestore(): Promise<Customer[]> {
   try {
     const colRef = collection(db, CUSTOMERS_COLLECTION);

@@ -18,6 +18,32 @@ interface AdvancePaymentModalProps {
   onDeletePayment?: (paymentId: string) => void;
 }
 
+const marathiMonthNames = ['जानेवारी', 'फेब्रुवारी', 'मार्च', 'एप्रिल', 'मे', 'जून', 'जुलै', 'ऑगस्ट', 'सप्टेंबर', 'ऑक्टोबर', 'नोव्हेंबर', 'डिसेंबर'];
+const englishMonthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const marathiDigitsMap = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
+const toMarathiDigits = (n: number) => String(n).split('').map((c) => marathiDigitsMap[+c] ?? c).join('');
+
+function getTodayFullDateStr(language: string): string {
+  const d = new Date();
+  return language === 'mr'
+    ? `${toMarathiDigits(d.getDate())} ${marathiMonthNames[d.getMonth()]} ${toMarathiDigits(d.getFullYear())} (आज)`
+    : `${d.getDate()} ${englishMonthNames[d.getMonth()]} ${d.getFullYear()} (Today)`;
+}
+
+function getCurrentMonthYearStr(language: string): string {
+  const d = new Date();
+  return language === 'mr'
+    ? `${marathiMonthNames[d.getMonth()]} ${toMarathiDigits(d.getFullYear())}`
+    : `${englishMonthNames[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function getDefaultAdvanceNote(language: string): string {
+  const d = new Date();
+  return language === 'mr'
+    ? `${marathiMonthNames[d.getMonth()]} महिन्याची ॲडव्हान्स पावती`
+    : `Advance receipt for ${englishMonthNames[d.getMonth()]}`;
+}
+
 export const AdvancePaymentModal: React.FC<AdvancePaymentModalProps> = ({
   isOpen,
   customer,
@@ -30,9 +56,7 @@ export const AdvancePaymentModal: React.FC<AdvancePaymentModalProps> = ({
   const { language, t, formatNum, formatCurrency } = useLanguage();
   const [amount, setAmount] = useState<number>(1000);
   const [method, setMethod] = useState<'cash' | 'gpay' | 'bank'>('cash');
-  const [note, setNote] = useState(
-    language === 'mr' ? 'सप्टेंबर महिन्याची ॲडव्हान्स पावती' : 'Advance receipt for September'
-  );
+  const [note, setNote] = useState(getDefaultAdvanceNote(language));
 
   useEffect(() => {
     if (paymentToEdit) {
@@ -42,9 +66,7 @@ export const AdvancePaymentModal: React.FC<AdvancePaymentModalProps> = ({
     } else {
       setAmount(1000);
       setMethod('cash');
-      setNote(
-        language === 'mr' ? 'सप्टेंबर महिन्याची ॲडव्हान्स पावती' : 'Advance receipt for September'
-      );
+      setNote(getDefaultAdvanceNote(language));
     }
   }, [paymentToEdit, isOpen, language]);
 
@@ -134,7 +156,7 @@ export const AdvancePaymentModal: React.FC<AdvancePaymentModalProps> = ({
               </div>
             </div>
             <span className="font-label-sm text-[11px] px-2.5 py-1 rounded-full bg-[#ffffff] text-[#5a4138] shadow-xs border border-[#e2bfb2]/30 font-medium">
-              {language === 'mr' ? 'सप्टेंबर २०२६' : 'September 2026'}
+              {getCurrentMonthYearStr(language)}
             </span>
           </div>
 
@@ -157,7 +179,7 @@ export const AdvancePaymentModal: React.FC<AdvancePaymentModalProps> = ({
                 <input
                   type="text"
                   readOnly
-                  value={language === 'mr' ? '९ सप्टेंबर २०२६ (आज)' : '9 September 2026 (Today)'}
+                  value={getTodayFullDateStr(language)}
                   className="w-full h-12 pl-11 pr-4 bg-[#eff4ff] rounded-xl font-body-lg text-[15px] text-[#0b1c30] focus:outline-none shadow-xs cursor-default font-medium"
                 />
               </div>

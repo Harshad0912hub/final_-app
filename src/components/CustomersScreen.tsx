@@ -507,14 +507,16 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                       <p className="font-body-sm text-[12px] text-[#5a4138]/80 truncate mt-0.5">
                         {cust.address}
                       </p>
-                      <p className="font-label-sm text-[11px] text-[#ba1a1a] font-medium mt-1 flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[13px]">event_busy</span>
-                        <span>
-                          {language === 'mr'
-                            ? `बंद केल्याची तारीख: ${cust.deactivatedDate || '१५ ऑगस्ट'}`
-                            : `Deactivated: ${cust.deactivatedDate || 'Aug 15'}`}
-                        </span>
-                      </p>
+                      {cust.deactivatedDate && (
+                        <p className="font-label-sm text-[11px] text-[#ba1a1a] font-medium mt-1 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[13px]">event_busy</span>
+                          <span>
+                            {language === 'mr'
+                              ? `बंद केल्याची तारीख: ${cust.deactivatedDate}`
+                              : `Deactivated: ${cust.deactivatedDate}`}
+                          </span>
+                        </p>
+                      )}
                     </div>
                   </div>
 

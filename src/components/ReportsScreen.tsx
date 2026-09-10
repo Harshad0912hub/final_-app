@@ -89,13 +89,22 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     (del) => del.customerId === selectedCustomer.id
   );
 
-  const monthsList = [
-    language === 'mr' ? 'ऑगस्ट २०२६' : 'August 2026',
-    language === 'mr' ? 'सप्टेंबर २०२६' : 'September 2026',
-    language === 'mr' ? 'ऑक्टोबर २०२६' : 'October 2026',
-  ];
-  const monthPrefixes = ['2026-08', '2026-09', '2026-10'];
-  const activeMonthPrefix = monthPrefixes[selectedMonthIndex] || '2026-09';
+  // Rolling 3-month window (last month, this month, next month) computed from
+  // the real current date - NOT hardcoded, so this keeps working in any month/year.
+  const marathiMonthNames = ['जानेवारी', 'फेब्रुवारी', 'मार्च', 'एप्रिल', 'मे', 'जून', 'जुलै', 'ऑगस्ट', 'सप्टेंबर', 'ऑक्टोबर', 'नोव्हेंबर', 'डिसेंबर'];
+  const englishMonthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const marathiDigitsMap = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
+  const toMarathiDigits = (n: number) => String(n).split('').map((c) => marathiDigitsMap[+c] ?? c).join('');
+  const now = new Date();
+  const monthOffsets = [-1, 0, 1];
+  const monthDates = monthOffsets.map((offset) => new Date(now.getFullYear(), now.getMonth() + offset, 1));
+  const monthsList = monthDates.map((d) =>
+    language === 'mr'
+      ? `${marathiMonthNames[d.getMonth()]} ${toMarathiDigits(d.getFullYear())}`
+      : `${englishMonthNames[d.getMonth()]} ${d.getFullYear()}`
+  );
+  const monthPrefixes = monthDates.map((d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  const activeMonthPrefix = monthPrefixes[selectedMonthIndex] || monthPrefixes[1];
 
   // Deduplicate by dateKey if multiple entries exist
   const dateMap: Record<string, DayDelivery> = {};

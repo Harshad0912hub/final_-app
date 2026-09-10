@@ -20,6 +20,7 @@ import { getTodayDateKey, getDateKeyRange } from './utils/dateUtils';
 import {
   Customer,
   DayDelivery,
+  DietType,
   PaymentRecord,
   Holiday,
   ExtraItem,
@@ -46,6 +47,7 @@ import {
   subscribeToHolidays,
   saveHolidayToFirestore,
   deleteHolidayFromFirestore,
+  deleteCustomerDeliveriesFromFirestore,
   subscribeToExtraItems,
   saveExtraItemToFirestore,
   deleteExtraItemFromFirestore,
@@ -1091,7 +1093,14 @@ export default function App() {
     setCustomers((prev) =>
       prev.map((c) => {
         if (c.id === customerId) {
-          const updated = { ...c, status };
+          // Firestore's setDoc() throws on an explicit `undefined` field value
+          // (rejecting the whole write), so drop deactivatedDate entirely on
+          // reactivation instead of setting it to undefined.
+          const { deactivatedDate: _oldDeactivatedDate, ...rest } = c;
+          const updated: Customer =
+            status === 'inactive'
+              ? { ...rest, status, deactivatedDate: getMarathiDateStr() }
+              : { ...rest, status };
           saveCustomerToFirestore(updated).catch((err) =>
             console.warn('Customer status update skipped:', err)
           );
@@ -1131,6 +1140,9 @@ export default function App() {
     triggerToast(`'${custToDelete?.name || 'ग्राहक'}' कायमचा काढून टाकला.`);
     deleteCustomerFromFirestore(customerId).catch((err) =>
       console.warn('Customer delete from cloud skipped:', err)
+    );
+    deleteCustomerDeliveriesFromFirestore(customerId).catch((err) =>
+      console.warn('Customer delivery history delete from cloud skipped:', err)
     );
   };
 
