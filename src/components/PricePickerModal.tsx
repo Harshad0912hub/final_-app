@@ -9,9 +9,10 @@ interface PricePickerModalProps {
   currentPrice: number;
   currentStatus: DeliveryStatus;
   currentDietType?: DietType;
+  currentLabel?: string;
   dateStr?: string;
   onClose: () => void;
-  onConfirmDelivery: (price: number, dietType?: DietType) => void;
+  onConfirmDelivery: (price: number, dietType?: DietType, label?: string) => void;
   onMarkLeave: () => void;
   onClearMark: () => void;
 }
@@ -22,6 +23,7 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
   session,
   currentPrice: initialPrice,
   currentDietType,
+  currentLabel,
   dateStr,
   onClose,
   onConfirmDelivery,
@@ -31,17 +33,19 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
   const { language, t, formatNum, formatCurrency } = useLanguage();
   const [selectedPrice, setSelectedPrice] = useState<number>(initialPrice || 70);
   const [selectedDiet, setSelectedDiet] = useState<DietType>(currentDietType || customer?.dietType || 'veg');
+  const [note, setNote] = useState<string>(currentLabel || '');
   const [showCustomBox, setShowCustomBox] = useState(false);
 
   useEffect(() => {
     const defaultP = initialPrice || customer?.ratePerTiffin || 70;
     setSelectedPrice(defaultP);
     setSelectedDiet(currentDietType || customer?.dietType || 'veg');
+    setNote(currentLabel || '');
     // If current price is not standard preset, open custom box
     if (![55, 60, 65, 70, 75, 80].includes(defaultP)) {
       setShowCustomBox(true);
     }
-  }, [initialPrice, currentDietType, customer]);
+  }, [initialPrice, currentDietType, currentLabel, customer]);
 
   if (!isOpen || !customer) return null;
 
@@ -305,12 +309,29 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
           </div>
         </div>
 
+        {/* Optional note - why the price is different (extra chapati, extra dabba etc.) */}
+        <div className="mb-4">
+          <label className="flex flex-col gap-1">
+            <span className="font-label-sm text-[12px] text-[#5a4138] font-semibold flex items-center gap-1">
+              <span className="material-symbols-outlined text-[15px] text-[#a33900]">edit_note</span>
+              {language === 'mr' ? 'टीप (कारण) - ऐच्छिक' : 'Note (Reason) - Optional'}
+            </span>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={language === 'mr' ? 'उदा. १ जास्तीचा डबा, एक्स्ट्रा चपाती' : 'e.g. Extra dabba, extra chapati'}
+              className="h-11 px-3 rounded-xl bg-[#eff4ff] text-[#0b1c30] font-body-md text-[13px] border border-[#dce9ff] focus:outline-none focus:border-[#a33900] placeholder:text-[#5a4138]/50"
+            />
+          </label>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex flex-col gap-2.5">
           {/* Primary: डबा दिला */}
           <button
             type="button"
-            onClick={() => onConfirmDelivery(selectedPrice, selectedDiet)}
+            onClick={() => onConfirmDelivery(selectedPrice, selectedDiet, note.trim() || undefined)}
             className="w-full min-h-[48px] bg-[#a33900] text-white font-label-lg text-[15px] font-bold rounded-full flex items-center justify-center gap-2 shadow-md hover:bg-[#8d4b00] active:scale-[0.98] transition-all"
           >
             <span className="material-symbols-outlined text-[20px]">check_circle</span>

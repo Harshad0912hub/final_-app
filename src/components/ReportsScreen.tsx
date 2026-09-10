@@ -25,6 +25,7 @@ interface ReportsScreenProps {
     dueAmount: number;
     totalLeaveDays: number;
     leaveDateKeys: string[];
+    noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[];
   }) => void;
 }
 
@@ -116,12 +117,16 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   let totalLeaveDays = 0;
   let totalBill = 0;
   const leaveDateKeys: string[] = [];
+  const noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[] = [];
 
   deliveryList.forEach((del) => {
     let dayLeaves = 0;
     if (del.morning?.status === 'delivered') {
       totalTiffins++;
       totalBill += del.morning.price ?? selectedCustomer.ratePerTiffin;
+      if (del.morning.label) {
+        noteEntries.push({ dateKey: del.dateKey, session: 'morning', price: del.morning.price, label: del.morning.label });
+      }
     } else if (del.morning?.status === 'leave') {
       dayLeaves++;
     }
@@ -129,6 +134,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     if (del.evening?.status === 'delivered') {
       totalTiffins++;
       totalBill += del.evening.price ?? selectedCustomer.ratePerTiffin;
+      if (del.evening.label) {
+        noteEntries.push({ dateKey: del.dateKey, session: 'evening', price: del.evening.price, label: del.evening.label });
+      }
     } else if (del.evening?.status === 'leave') {
       dayLeaves++;
     }
@@ -138,6 +146,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       if (del.dateKey) leaveDateKeys.push(del.dateKey);
     }
   });
+
+  // Oldest first, for a readable list in the invoice
+  noteEntries.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
   // Oldest first, for a readable list in the invoice
   leaveDateKeys.sort();
@@ -430,6 +441,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 dueAmount,
                 totalLeaveDays,
                 leaveDateKeys,
+                noteEntries,
               },
               filteredPayments
             )
@@ -618,15 +630,21 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
               const isSunday = !isNaN(dateObj.getTime()) && dateObj.getDay() === 0;
 
+              const dayNotes = [
+                dayItem.morning?.status === 'delivered' && dayItem.morning.label ? `🌅 ${dayItem.morning.label}` : null,
+                dayItem.evening?.status === 'delivered' && dayItem.evening.label ? `🌙 ${dayItem.evening.label}` : null,
+              ].filter(Boolean);
+
               return (
                 <div
                   key={idx}
-                  className={`flex items-center justify-between p-2.5 rounded-xl border transition-colors ${
+                  className={`flex flex-col gap-1 p-2.5 rounded-xl border transition-colors ${
                     isSunday
                       ? 'bg-[#eff4ff]/70 border-dashed border-[#cbdbf5]'
                       : 'bg-[#eff4ff] border-[#e5eeff] hover:bg-[#dce9ff]'
                   }`}
                 >
+                <div className="flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="font-label-lg text-[13px] text-[#0b1c30] font-semibold">
                       {formattedDateStr}
@@ -719,6 +737,17 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                       </span>
                     </span>
                   </div>
+                </div>
+                {dayNotes.length > 0 && (
+                  <div className="flex flex-col gap-0.5 pl-0.5">
+                    {dayNotes.map((note, noteIdx) => (
+                      <span key={noteIdx} className="font-body-sm text-[11px] text-[#8d4b00] flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">edit_note</span>
+                        {note}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 </div>
               );
             })}

@@ -13,6 +13,7 @@ interface WhatsAppInvoicePreviewProps {
   payments?: PaymentRecord[];
   totalLeaveDays?: number;
   leaveDateKeys?: string[];
+  noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[];
   onBack: () => void;
 }
 
@@ -26,6 +27,7 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
   payments = [],
   totalLeaveDays = 0,
   leaveDateKeys = [],
+  noteEntries = [],
   onBack,
 }) => {
   const { language, t, formatNum, formatCurrency } = useLanguage();
@@ -56,6 +58,19 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
       ? `Leave Days: ${formatNum(totalLeaveDays)}${leaveDatesStr ? ` (${leaveDatesStr})` : ''} - not charged\n`
       : '';
 
+  const noteLinesMr =
+    noteEntries.length > 0
+      ? `\nविशेष नोंदी:\n${noteEntries
+          .map((e) => `- ${formatLeaveDateKey(e.dateKey)} (${e.session === 'morning' ? 'सकाळ' : 'संध्याकाळ'}, ₹${e.price}): ${e.label}`)
+          .join('\n')}\n`
+      : '';
+  const noteLinesEn =
+    noteEntries.length > 0
+      ? `\nSpecial Notes:\n${noteEntries
+          .map((e) => `- ${formatLeaveDateKey(e.dateKey)} (${e.session === 'morning' ? 'Morning' : 'Evening'}, ₹${e.price}): ${e.label}`)
+          .join('\n')}\n`
+      : '';
+
   const defaultInvoiceText =
     language === 'mr'
       ? `श्रावणी टिफीन सेंटर
@@ -67,7 +82,7 @@ ${customer.name} — ${monthStr} (${dietLabel})
 एकुण रक्कम: ${formatCurrency(totalBill)}
 ${leaveLineMr}ऍडव्हान्स पेमेंट: ${formatCurrency(paidAmount)}
 उर्वरित रक्कम: ${formatCurrency(dueAmount)}
-
+${noteLinesMr}
 धन्यवाद!`
       : `Shravani Tiffin Center
 Mob. 9823784142
@@ -78,7 +93,7 @@ Total Tiffins: ${formatNum(totalTiffins)}
 Total Amount: ${formatCurrency(totalBill)}
 ${leaveLineEn}Advance Paid: ${formatCurrency(paidAmount)}
 Balance Due: ${formatCurrency(dueAmount)}
-
+${noteLinesEn}
 Thank you!`;
 
   const [invoiceText, setInvoiceText] = useState(defaultInvoiceText);
@@ -259,6 +274,27 @@ Thank you!`;
             {leaveDatesStr && (
               <p className="font-body-sm text-[11px] text-[#8d4b00] mt-0.5">{leaveDatesStr}</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Special Notes - custom-priced days (extra dabba, extra chapati etc.) */}
+      {noteEntries.length > 0 && (
+        <div className="mt-2.5 bg-[#eff4ff] rounded-2xl p-3 flex items-start gap-2 border border-[#dce9ff]">
+          <span className="material-symbols-outlined text-[18px] text-[#a33900] shrink-0 mt-0.5">
+            edit_note
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-label-md text-[12px] text-[#0b1c30] font-bold mb-1">
+              {language === 'mr' ? 'विशेष नोंदी' : 'Special Notes'}
+            </p>
+            <div className="flex flex-col gap-0.5">
+              {noteEntries.map((entry, idx) => (
+                <p key={idx} className="font-body-sm text-[11px] text-[#5a4138]">
+                  {formatLeaveDateKey(entry.dateKey)} ({entry.session === 'morning' ? (language === 'mr' ? 'सकाळ' : 'Morning') : (language === 'mr' ? 'संध्याकाळ' : 'Evening')}, {formatCurrency(entry.price)}): {entry.label}
+                </p>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -62,6 +62,7 @@ export interface PricePickerState {
   currentPrice: number;
   currentStatus: DeliveryStatus;
   currentDietType?: DietType;
+  currentLabel?: string;
   dateKey?: string;
   formattedDateStr?: string;
 }

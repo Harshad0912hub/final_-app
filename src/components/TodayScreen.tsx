@@ -981,6 +981,23 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
                   </button>
                 )}
               </div>
+
+              {(mRec.status === 'delivered' && mRec.label) || (eRec.status === 'delivered' && eRec.label) ? (
+                <div className="flex flex-col gap-0.5">
+                  {mRec.status === 'delivered' && mRec.label && (
+                    <p className="font-body-sm text-[11px] text-[#8d4b00] flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">edit_note</span>
+                      <span>🌅 {mRec.label}</span>
+                    </p>
+                  )}
+                  {eRec.status === 'delivered' && eRec.label && (
+                    <p className="font-body-sm text-[11px] text-[#8d4b00] flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">edit_note</span>
+                      <span>🌙 {eRec.label}</span>
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </div>
           );
         })}

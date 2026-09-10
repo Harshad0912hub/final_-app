@@ -9,6 +9,7 @@ export interface InvoiceMetrics {
   dueAmount: number;
   totalLeaveDays?: number;
   leaveDateKeys?: string[];
+  noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[];
 }
 
 const PDF_MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -212,8 +213,28 @@ export function generateSingleInvoicePDF(
   doc.text('BALANCE DUE:', boxX, currentY + 8);
   doc.text(`Rs. ${metrics.dueAmount.toLocaleString('en-IN')}`, pageWidth - 20, currentY + 8, { align: 'right' });
 
-  // Payment History (if any)
+  // Special Notes (custom-priced deliveries - extra chapati, extra dabba etc.)
   currentY += 22;
+  if (metrics.noteEntries && metrics.noteEntries.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(11, 28, 48);
+    doc.text('Special Notes:', 14, currentY);
+
+    currentY += 4;
+    doc.setFontSize(9);
+    metrics.noteEntries.forEach((entry) => {
+      currentY += 6;
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(141, 75, 0);
+      const cleanDate = formatDateKeyForPDF(entry.dateKey);
+      const sessionLabel = entry.session === 'morning' ? 'Morning' : 'Evening';
+      doc.text(`- ${cleanDate} (${sessionLabel}, Rs. ${entry.price}): ${entry.label}`, 18, currentY);
+    });
+    currentY += 6;
+  }
+
+  // Payment History (if any)
   if (customerPayments && customerPayments.length > 0) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);

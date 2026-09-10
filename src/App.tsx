@@ -331,6 +331,7 @@ export default function App() {
     dueAmount: 1100,
     totalLeaveDays: 0,
     leaveDateKeys: [] as string[],
+    noteEntries: [] as { dateKey: string; session: 'morning' | 'evening'; price: number; label: string }[],
   });
 
   // Global toast feedback
@@ -376,13 +377,14 @@ export default function App() {
       currentPrice: sessionRec?.price || customer.ratePerTiffin,
       currentStatus: sessionRec?.status || 'pending',
       currentDietType: sessionRec?.dietType || customer.dietType || 'veg',
+      currentLabel: sessionRec?.label || '',
       dateKey: activeDateKey,
       formattedDateStr: formattedDateStr,
     });
   };
 
   // Handler: Confirm delivery from Price Picker
-  const handleConfirmDelivery = (price: number, dietType?: DietType) => {
+  const handleConfirmDelivery = (price: number, dietType?: DietType, label?: string) => {
     const custId = pricePicker.customerId;
     const session = pricePicker.session;
     const activeDateKey = pricePicker.dateKey || getTodayDateKey();
@@ -406,6 +408,7 @@ export default function App() {
         status: 'delivered',
         price,
         dietType: chosenDiet,
+        label,
       },
     };
 
@@ -1078,6 +1081,7 @@ export default function App() {
             dueAmount={invoiceMetrics.dueAmount}
             totalLeaveDays={invoiceMetrics.totalLeaveDays}
             leaveDateKeys={invoiceMetrics.leaveDateKeys}
+            noteEntries={invoiceMetrics.noteEntries}
             monthStr={getMarathiMonthYearStr()}
             payments={payments}
             onBack={() => setShowWhatsAppInvoice(false)}
@@ -1168,6 +1172,7 @@ export default function App() {
         currentPrice={pricePicker.currentPrice}
         currentStatus={pricePicker.currentStatus}
         currentDietType={pricePicker.currentDietType}
+        currentLabel={pricePicker.currentLabel}
         dateStr={pricePicker.formattedDateStr}
         onClose={() => setPricePicker((prev) => ({ ...prev, isOpen: false }))}
         onConfirmDelivery={handleConfirmDelivery}
