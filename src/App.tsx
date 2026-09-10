@@ -59,7 +59,7 @@ import {
 } from './firebase';
 import { NotificationsScreen } from './components/NotificationsScreen';
 import { getMonthKey } from './utils/dateUtils';
-import { computeCustomerDueForMonth, getPreviousMonthPrefix } from './utils/duesUtils';
+import { computeCustomerCumulativeDueThroughMonth, getPreviousMonthPrefix } from './utils/duesUtils';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
@@ -1232,7 +1232,7 @@ export default function App() {
     .map((c) => ({
       id: c.id,
       name: c.name,
-      due: computeCustomerDueForMonth(c, dayDeliveries, payments, previousMonthPrefix),
+      due: computeCustomerCumulativeDueThroughMonth(c, dayDeliveries, payments, previousMonthPrefix),
     }))
     .filter((c) => c.due > 0);
 
