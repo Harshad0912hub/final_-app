@@ -27,6 +27,7 @@ interface ReportsScreenProps {
     leaveDateKeys: string[];
     noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
   }) => void;
+  onMarkBillSent?: (customerId: string) => void;
 }
 
 export const ReportsScreen: React.FC<ReportsScreenProps> = ({
@@ -40,6 +41,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   onDeletePayment,
   onAddCustomer,
   onOpenWhatsAppInvoice,
+  onMarkBillSent,
 }) => {
   const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState(false);
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(1); // September
@@ -431,7 +433,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
+            onMarkBillSent?.(selectedCustomer.id);
             generateSingleInvoicePDF(
               selectedCustomer,
               monthsList[selectedMonthIndex],
@@ -445,8 +448,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 noteEntries,
               },
               filteredPayments
-            )
-          }
+            );
+          }}
           className="w-full min-h-[46px] bg-[#eff4ff] hover:bg-[#dce9ff] text-[#0b1c30] p-3 rounded-2xl shadow-xs flex items-center justify-between border border-[#ffdbce]/60 transition-transform active:scale-[0.99]"
         >
           <div className="flex items-center gap-2.5 text-left">

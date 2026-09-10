@@ -14,6 +14,9 @@ interface HeaderProps {
   onToggleLargeText?: () => void;
   onExportBackup?: () => void;
   onImportBackup?: (file: File) => void;
+  billingReminderDay?: number;
+  onSetBillingReminderDay?: (day: number) => void;
+  unbilledCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -29,11 +32,16 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleLargeText,
   onExportBackup,
   onImportBackup,
+  billingReminderDay = 1,
+  onSetBillingReminderDay,
+  unbilledCount = 0,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const [pendingRestoreFile, setPendingRestoreFile] = useState<File | null>(null);
+  const [showBillingModal, setShowBillingModal] = useState(false);
+  const [draftReminderDay, setDraftReminderDay] = useState(billingReminderDay);
   const restoreInputRef = useRef<HTMLInputElement>(null);
   const { language, toggleLanguage, t, formatNum } = useLanguage();
 
@@ -190,6 +198,29 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                     )}
 
+                    {/* Billing Reminder Date Setting */}
+                    {onSetBillingReminderDay && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraftReminderDay(billingReminderDay);
+                          setShowBillingModal(true);
+                          setShowMenu(false);
+                        }}
+                        className="flex items-center justify-between gap-2.5 px-3 py-2 text-left rounded-xl text-[13px] font-semibold text-[#0b1c30] hover:bg-[#eff4ff] active:scale-98 transition-all"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <span className="material-symbols-outlined text-[18px] text-[#a33900]">
+                            receipt_long
+                          </span>
+                          <span>{language === 'mr' ? 'बिलिंग रिमाइंडर तारीख' : 'Billing Reminder Date'}</span>
+                        </span>
+                        <span className="font-label-sm text-[11px] bg-[#ffdbce] text-[#a33900] px-2 py-0.5 rounded-full font-bold">
+                          {formatNum(billingReminderDay)}
+                        </span>
+                      </button>
+                    )}
+
                     {/* Install App button if not already running standalone */}
                     {!isInstalled && onInstallPWA && (
                       <button
@@ -327,6 +358,96 @@ export const Header: React.FC<HeaderProps> = ({
                 className="h-11 rounded-full bg-[#ba1a1a] text-white font-label-md text-[13px] font-bold hover:bg-[#93000a] active:scale-95 transition-all shadow-sm"
               >
                 {t('confirmDelete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Billing Reminder Date Setting Modal */}
+      {showBillingModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-xs w-full shadow-2xl border border-[#eff4ff] flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-11 h-11 rounded-2xl bg-[#a33900]/10 flex items-center justify-center text-[#a33900] shrink-0">
+                <span className="material-symbols-outlined text-[24px]">receipt_long</span>
+              </div>
+              <div>
+                <h3 className="font-headline-sm text-[16px] text-[#0b1c30] font-bold leading-tight">
+                  {language === 'mr' ? 'बिलिंग रिमाइंडर तारीख' : 'Billing Reminder Date'}
+                </h3>
+                <p className="font-body-sm text-[11.5px] text-[#5a4138] leading-tight">
+                  {language === 'mr' ? 'दर महिन्याला कोणत्या तारखेला आठवण द्यायची?' : 'Which date each month should we remind you?'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mt-4 mb-1">
+              <button
+                type="button"
+                onClick={() => setDraftReminderDay((d) => Math.max(1, d - 1))}
+                className="w-10 h-10 rounded-xl bg-[#eff4ff] text-[#5a4138] font-bold flex items-center justify-center active:scale-90 hover:bg-[#dce9ff]"
+              >
+                <span className="material-symbols-outlined text-[18px]">remove</span>
+              </button>
+              <div className="flex-1 h-12 rounded-xl bg-[#fff3eb] border border-[#ffd5bc] flex items-center justify-center gap-1">
+                <span className="font-headline-md text-[22px] text-[#a33900] font-bold">
+                  {formatNum(draftReminderDay)}
+                </span>
+                <span className="font-body-sm text-[12px] text-[#8d4b00]">
+                  {language === 'mr' ? 'तारखेला' : 'of the month'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDraftReminderDay((d) => Math.min(28, d + 1))}
+                className="w-10 h-10 rounded-xl bg-[#eff4ff] text-[#5a4138] font-bold flex items-center justify-center active:scale-90 hover:bg-[#dce9ff]"
+              >
+                <span className="material-symbols-outlined text-[18px]">add</span>
+              </button>
+            </div>
+
+            {/* Live preview of exactly what the banner will look like */}
+            <p className="font-label-sm text-[11px] text-[#5a4138] font-semibold mt-3 mb-1.5">
+              {language === 'mr' ? 'असे दिसेल:' : 'This is what you\'ll see:'}
+            </p>
+            <div className="p-3 bg-linear-to-r from-[#fff3eb] to-[#ffebd8] border border-[#ffd5bc] rounded-2xl flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-[#a33900] text-white flex items-center justify-center shrink-0 shadow-xs">
+                <span className="material-symbols-outlined text-[20px]">receipt_long</span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-[#0b1c30] leading-snug">
+                  {language === 'mr' ? 'आज बिलिंग दिवस आहे' : "It's billing day"}
+                </p>
+                <p className="text-[11px] text-[#5a4138] leading-tight">
+                  {language === 'mr'
+                    ? `${formatNum(unbilledCount || 5)} ग्राहकांना अजून या महिन्याचे बिल पाठवले नाही`
+                    : `${formatNum(unbilledCount || 5)} customers haven't been sent this month's bill yet`}
+                </p>
+              </div>
+            </div>
+            <p className="font-body-sm text-[11px] text-[#5a4138] mt-2 leading-snug">
+              {language === 'mr'
+                ? `दर महिन्याच्या ${formatNum(draftReminderDay)} तारखेपासून, ज्यांना अजून बिल पाठवले नाही तितके ग्राहक असतील तोपर्यंत हे "आज" स्क्रीनवर वर दिसेल.`
+                : `From the ${formatNum(draftReminderDay)}${draftReminderDay === 1 ? 'st' : draftReminderDay === 2 ? 'nd' : draftReminderDay === 3 ? 'rd' : 'th'} of each month onward, this shows on the Today screen as long as some customers haven't been billed yet.`}
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 w-full mt-4">
+              <button
+                type="button"
+                onClick={() => setShowBillingModal(false)}
+                className="h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-md text-[13px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSetBillingReminderDay?.(draftReminderDay);
+                  setShowBillingModal(false);
+                }}
+                className="h-11 rounded-full bg-[#a33900] text-white font-label-md text-[13px] font-bold hover:bg-[#8d4b00] active:scale-95 transition-all shadow-sm"
+              >
+                {t('saveChanges')}
               </button>
             </div>
           </div>

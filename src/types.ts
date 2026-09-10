@@ -66,6 +66,17 @@ export interface ExtraItem {
   createdAt?: string;
 }
 
+export interface BillingSettings {
+  reminderDay: number; // day of month (1-28) to show the billing reminder banner
+}
+
+export interface BillingSentRecord {
+  id: string; // `${customerId}_${monthKey}`
+  customerId: string;
+  monthKey: string; // 'YYYY-MM'
+  sentAt: string;
+}
+
 export type ActiveTab = 'today' | 'customers' | 'reports';
 
 export interface PricePickerState {

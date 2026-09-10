@@ -23,6 +23,8 @@ import {
   PaymentRecord,
   Holiday,
   ExtraItem,
+  BillingSettings,
+  BillingSentRecord,
   ActiveTab,
   PricePickerState,
 } from './types';
@@ -47,8 +49,14 @@ import {
   subscribeToExtraItems,
   saveExtraItemToFirestore,
   deleteExtraItemFromFirestore,
+  subscribeToBillingSettings,
+  saveBillingSettingsToFirestore,
+  subscribeToBillingSent,
+  saveBillingSentToFirestore,
   clearFirestoreData,
 } from './firebase';
+import { BillingReminderBanner } from './components/BillingReminderBanner';
+import { getMonthKey } from './utils/dateUtils';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
@@ -147,6 +155,24 @@ export default function App() {
     }
   });
 
+  const [billingReminderDay, setBillingReminderDay] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('shravani_billing_reminder_day');
+      return saved ? Number(saved) : 1;
+    } catch {
+      return 1;
+    }
+  });
+
+  const [billingSentRecords, setBillingSentRecords] = useState<BillingSentRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('shravani_billing_sent');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('shravani_customers');
@@ -171,6 +197,8 @@ export default function App() {
     let unsubPayments: (() => void) | undefined;
     let unsubHolidays: (() => void) | undefined;
     let unsubExtraItems: (() => void) | undefined;
+    let unsubBillingSettings: (() => void) | undefined;
+    let unsubBillingSent: (() => void) | undefined;
 
     async function connectCloudSync() {
       setIsLoadingCloud(true);
@@ -215,6 +243,16 @@ export default function App() {
             if (!isMounted) return;
             setExtraItems(remoteExtraItems);
           });
+
+          unsubBillingSettings = subscribeToBillingSettings((settings) => {
+            if (!isMounted || !settings) return;
+            setBillingReminderDay(settings.reminderDay);
+          });
+
+          unsubBillingSent = subscribeToBillingSent((records) => {
+            if (!isMounted) return;
+            setBillingSentRecords(records);
+          });
         }
       } catch (e) {
         console.warn('Firebase live sync skipped or offline:', e);
@@ -231,6 +269,8 @@ export default function App() {
       unsubPayments?.();
       unsubHolidays?.();
       unsubExtraItems?.();
+      unsubBillingSettings?.();
+      unsubBillingSent?.();
     };
   }, []);
 
@@ -254,6 +294,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('shravani_extra_items', JSON.stringify(extraItems));
   }, [extraItems]);
+
+  useEffect(() => {
+    localStorage.setItem('shravani_billing_reminder_day', String(billingReminderDay));
+  }, [billingReminderDay]);
+
+  useEffect(() => {
+    localStorage.setItem('shravani_billing_sent', JSON.stringify(billingSentRecords));
+  }, [billingSentRecords]);
 
   // Handler: Clear All Data
   const handleClearAllData = async () => {
@@ -427,6 +475,32 @@ export default function App() {
   const handleDeleteExtraItem = (itemId: string) => {
     setExtraItems((prev) => prev.filter((it) => it.id !== itemId));
     deleteExtraItemFromFirestore(itemId).catch((err) => console.warn('Extra item delete from cloud skipped:', err));
+  };
+
+  // Handler: Owner sets which day of the month the billing reminder banner should appear on
+  const handleSetBillingReminderDay = (day: number) => {
+    setBillingReminderDay(day);
+    saveBillingSettingsToFirestore({ reminderDay: day }).catch((err) =>
+      console.warn('Billing reminder setting save to cloud skipped:', err)
+    );
+  };
+
+  // Handler: Mark a customer as billed for the current month (called when the
+  // owner actually sends or downloads that customer's bill), so the billing
+  // reminder banner stops counting them until next month.
+  const handleMarkBillSent = (customerId: string) => {
+    const monthKey = getMonthKey();
+    const record: BillingSentRecord = {
+      id: `${customerId}_${monthKey}`,
+      customerId,
+      monthKey,
+      sentAt: new Date().toISOString(),
+    };
+    setBillingSentRecords((prev) => {
+      const exists = prev.some((r) => r.id === record.id);
+      return exists ? prev : [...prev, record];
+    });
+    saveBillingSentToFirestore(record).catch((err) => console.warn('Billing-sent save to cloud skipped:', err));
   };
 
   // Handler: Confirm delivery from Price Picker
@@ -1102,6 +1176,15 @@ export default function App() {
   const activeCustomerForReports =
     customers.find((c) => c.id === selectedCustomerId) || customers[0];
 
+  // Active customers who haven't been billed (WhatsApp or PDF) for the current month yet
+  const currentMonthKey = getMonthKey();
+  const billedCustomerIdsThisMonth = new Set(
+    billingSentRecords.filter((r) => r.monthKey === currentMonthKey).map((r) => r.customerId)
+  );
+  const unbilledCustomerCount = customers.filter(
+    (c) => c.status === 'active' && !billedCustomerIdsThisMonth.has(c.id)
+  ).length;
+
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
 
   return (
@@ -1120,12 +1203,24 @@ export default function App() {
         onToggleLargeText={toggleLargeText}
         onExportBackup={handleExportBackup}
         onImportBackup={handleImportBackup}
+        billingReminderDay={billingReminderDay}
+        onSetBillingReminderDay={handleSetBillingReminderDay}
+        unbilledCount={unbilledCustomerCount}
       />
 
       {/* Main Screen Content */}
       <main className="flex-1 flex flex-col relative w-full pt-16 pb-20 px-3 max-w-md mx-auto">
         {/* PWA Install Banner on mobile/desktop browsers */}
         <PWAInstallBanner />
+
+        {/* Monthly billing reminder - shown from the configured day onward until every active customer is billed */}
+        {!showWhatsAppInvoice && (
+          <BillingReminderBanner
+            reminderDay={billingReminderDay}
+            unbilledCount={unbilledCustomerCount}
+            onGoToReports={() => setActiveTab('reports')}
+          />
+        )}
 
         {showWhatsAppInvoice && activeCustomerForReports ? (
           <WhatsAppInvoicePreview
@@ -1140,6 +1235,7 @@ export default function App() {
             monthStr={getMarathiMonthYearStr()}
             payments={payments}
             onBack={() => setShowWhatsAppInvoice(false)}
+            onMarkBillSent={() => handleMarkBillSent(activeCustomerForReports.id)}
           />
         ) : activeTab === 'today' ? (
           <TodayScreen
@@ -1204,6 +1300,7 @@ export default function App() {
               setInvoiceMetrics(metrics);
               setShowWhatsAppInvoice(true);
             }}
+            onMarkBillSent={handleMarkBillSent}
           />
         )}
       </main>

@@ -12,7 +12,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { Customer, DayDelivery, ExtraItem, Holiday, PaymentRecord } from './types';
+import { BillingSentRecord, BillingSettings, Customer, DayDelivery, ExtraItem, Holiday, PaymentRecord } from './types';
 import { getTodayDateKey } from './utils/dateUtils';
 
 // Initialize Firebase App
@@ -79,6 +79,9 @@ const DELIVERIES_COLLECTION = 'daily_deliveries';
 const PAYMENTS_COLLECTION = 'payments';
 const HOLIDAYS_COLLECTION = 'holidays';
 const EXTRA_ITEMS_COLLECTION = 'extraItems';
+const BILLING_SENT_COLLECTION = 'billingSent';
+const APP_SETTINGS_COLLECTION = 'appSettings';
+const BILLING_SETTINGS_DOC_ID = 'billing';
 
 // Customer operations
 export async function saveCustomerToFirestore(customer: Customer): Promise<void> {
@@ -313,6 +316,54 @@ export function subscribeToExtraItems(onData: (items: ExtraItem[]) => void): Uns
   );
 }
 
+// Billing reminder settings (which day of the month to show the reminder banner)
+export async function saveBillingSettingsToFirestore(settings: BillingSettings): Promise<void> {
+  try {
+    const docRef = doc(db, APP_SETTINGS_COLLECTION, BILLING_SETTINGS_DOC_ID);
+    await setDoc(docRef, {
+      ...settings,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${APP_SETTINGS_COLLECTION}/${BILLING_SETTINGS_DOC_ID}`);
+  }
+}
+
+export function subscribeToBillingSettings(onData: (settings: BillingSettings | null) => void): Unsubscribe {
+  const docRef = doc(db, APP_SETTINGS_COLLECTION, BILLING_SETTINGS_DOC_ID);
+  return onSnapshot(
+    docRef,
+    (snap) => {
+      onData(snap.exists() ? (snap.data() as BillingSettings) : null);
+    },
+    (err) => handleFirestoreError(err, OperationType.GET, `${APP_SETTINGS_COLLECTION}/${BILLING_SETTINGS_DOC_ID}`)
+  );
+}
+
+// Billing-sent log (tracks which customer already got this month's bill, so the
+// reminder banner only counts customers who genuinely haven't been billed yet)
+export async function saveBillingSentToFirestore(record: BillingSentRecord): Promise<void> {
+  try {
+    const docRef = doc(db, BILLING_SENT_COLLECTION, record.id);
+    await setDoc(docRef, record);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${BILLING_SENT_COLLECTION}/${record.id}`);
+  }
+}
+
+export function subscribeToBillingSent(onData: (records: BillingSentRecord[]) => void): Unsubscribe {
+  const colRef = collection(db, BILLING_SENT_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snap) => {
+      const list: BillingSentRecord[] = [];
+      snap.forEach((d) => list.push(d.data() as BillingSentRecord));
+      onData(list);
+    },
+    (err) => handleFirestoreError(err, OperationType.LIST, BILLING_SENT_COLLECTION)
+  );
+}
+
 // Clear all Firestore data
 export async function clearFirestoreData(): Promise<void> {
   try {
@@ -331,6 +382,9 @@ export async function clearFirestoreData(): Promise<void> {
 
     const extraItemsSnap = await getDocs(collection(db, EXTRA_ITEMS_COLLECTION));
     extraItemsSnap.forEach((d) => batch.delete(d.ref));
+
+    const billingSentSnap = await getDocs(collection(db, BILLING_SENT_COLLECTION));
+    billingSentSnap.forEach((d) => batch.delete(d.ref));
 
     await batch.commit();
   } catch (err) {

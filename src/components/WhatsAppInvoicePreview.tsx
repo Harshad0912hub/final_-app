@@ -15,6 +15,7 @@ interface WhatsAppInvoicePreviewProps {
   leaveDateKeys?: string[];
   noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
   onBack: () => void;
+  onMarkBillSent?: () => void;
 }
 
 export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
@@ -29,6 +30,7 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
   leaveDateKeys = [],
   noteEntries = [],
   onBack,
+  onMarkBillSent,
 }) => {
   const { language, t, formatNum, formatCurrency } = useLanguage();
   const [copied, setCopied] = useState(false);
@@ -412,6 +414,7 @@ Thank you!`;
           href={whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() => onMarkBillSent?.()}
           className="w-full h-13 py-3 px-4 rounded-full bg-[#25D366] hover:bg-[#1EBE5D] text-white flex items-center justify-center gap-2 font-label-lg text-[16px] font-bold shadow-md hover:shadow-lg active:scale-[0.98] transition-all"
         >
           <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
@@ -442,6 +445,7 @@ Thank you!`;
           <button
             type="button"
             onClick={() => {
+              onMarkBillSent?.();
               generateSingleInvoicePDF(
                 customer,
                 monthStr,
