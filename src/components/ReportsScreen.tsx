@@ -164,7 +164,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   // Oldest first, for a readable list in the invoice
   leaveDateKeys.sort();
 
-  const dueAmount = Math.max(0, totalBill - totalPaid);
+  // Use the customer's precomputed running balance (all bills ever minus all
+  // payments ever) as the single source of truth for "how much do they
+  // currently owe" - matching what the Pending Dues notification shows.
+  // Scoping this to just the selected month's bill (against all-time
+  // payments) double-counts the same payments whenever more than one month
+  // is unpaid, silently understating real arrears.
+  const dueAmount = selectedCustomer.currentDue ?? Math.max(0, totalBill - totalPaid);
 
   return (
     <div className="flex flex-col w-full gap-3.5 pb-20 pt-1">
