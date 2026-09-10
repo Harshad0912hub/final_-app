@@ -56,7 +56,9 @@ import {
   clearFirestoreData,
 } from './firebase';
 import { BillingReminderBanner } from './components/BillingReminderBanner';
+import { PendingDuesBanner } from './components/PendingDuesBanner';
 import { getMonthKey } from './utils/dateUtils';
+import { computeCustomerDueForMonth, getPreviousMonthPrefix } from './utils/duesUtils';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
@@ -173,6 +175,15 @@ export default function App() {
     }
   });
 
+  const [pendingDuesEnabled, setPendingDuesEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('shravani_pending_dues_enabled');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('shravani_customers');
@@ -247,6 +258,9 @@ export default function App() {
           unsubBillingSettings = subscribeToBillingSettings((settings) => {
             if (!isMounted || !settings) return;
             setBillingReminderDay(settings.reminderDay);
+            if (typeof settings.pendingDuesEnabled === 'boolean') {
+              setPendingDuesEnabled(settings.pendingDuesEnabled);
+            }
           });
 
           unsubBillingSent = subscribeToBillingSent((records) => {
@@ -302,6 +316,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('shravani_billing_sent', JSON.stringify(billingSentRecords));
   }, [billingSentRecords]);
+
+  useEffect(() => {
+    localStorage.setItem('shravani_pending_dues_enabled', String(pendingDuesEnabled));
+  }, [pendingDuesEnabled]);
 
   // Handler: Clear All Data
   const handleClearAllData = async () => {
@@ -480,8 +498,18 @@ export default function App() {
   // Handler: Owner sets which day of the month the billing reminder banner should appear on
   const handleSetBillingReminderDay = (day: number) => {
     setBillingReminderDay(day);
-    saveBillingSettingsToFirestore({ reminderDay: day }).catch((err) =>
+    saveBillingSettingsToFirestore({ reminderDay: day, pendingDuesEnabled }).catch((err) =>
       console.warn('Billing reminder setting save to cloud skipped:', err)
+    );
+  };
+
+  // Handler: Toggle the "pending dues" notification banner (customers whose
+  // last month's bill is still not fully paid) on or off
+  const handleTogglePendingDues = () => {
+    const next = !pendingDuesEnabled;
+    setPendingDuesEnabled(next);
+    saveBillingSettingsToFirestore({ reminderDay: billingReminderDay, pendingDuesEnabled: next }).catch((err) =>
+      console.warn('Pending dues setting save to cloud skipped:', err)
     );
   };
 
@@ -1185,6 +1213,17 @@ export default function App() {
     (c) => c.status === 'active' && !billedCustomerIdsThisMonth.has(c.id)
   ).length;
 
+  // Customers whose previous month's bill is still not fully paid
+  const previousMonthPrefix = getPreviousMonthPrefix();
+  const overdueCustomers = customers
+    .filter((c) => c.status === 'active')
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      due: computeCustomerDueForMonth(c, dayDeliveries, payments, previousMonthPrefix),
+    }))
+    .filter((c) => c.due > 0);
+
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
 
   return (
@@ -1206,6 +1245,8 @@ export default function App() {
         billingReminderDay={billingReminderDay}
         onSetBillingReminderDay={handleSetBillingReminderDay}
         unbilledCount={unbilledCustomerCount}
+        pendingDuesEnabled={pendingDuesEnabled}
+        onTogglePendingDues={handleTogglePendingDues}
       />
 
       {/* Main Screen Content */}
@@ -1218,6 +1259,15 @@ export default function App() {
           <BillingReminderBanner
             reminderDay={billingReminderDay}
             unbilledCount={unbilledCustomerCount}
+            onGoToReports={() => setActiveTab('reports')}
+          />
+        )}
+
+        {/* Pending dues notification - names customers whose last month's bill is still unpaid */}
+        {!showWhatsAppInvoice && (
+          <PendingDuesBanner
+            enabled={pendingDuesEnabled}
+            overdueCustomers={overdueCustomers}
             onGoToReports={() => setActiveTab('reports')}
           />
         )}

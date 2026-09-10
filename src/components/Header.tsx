@@ -17,6 +17,8 @@ interface HeaderProps {
   billingReminderDay?: number;
   onSetBillingReminderDay?: (day: number) => void;
   unbilledCount?: number;
+  pendingDuesEnabled?: boolean;
+  onTogglePendingDues?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -35,6 +37,8 @@ export const Header: React.FC<HeaderProps> = ({
   billingReminderDay = 1,
   onSetBillingReminderDay,
   unbilledCount = 0,
+  pendingDuesEnabled = true,
+  onTogglePendingDues,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -217,6 +221,31 @@ export const Header: React.FC<HeaderProps> = ({
                         </span>
                         <span className="font-label-sm text-[11px] bg-[#ffdbce] text-[#a33900] px-2 py-0.5 rounded-full font-bold">
                           {formatNum(billingReminderDay)}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Pending Dues Notification Toggle */}
+                    {onTogglePendingDues && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onTogglePendingDues();
+                        }}
+                        className="flex items-center justify-between gap-2.5 px-3 py-2 text-left rounded-xl text-[13px] font-semibold text-[#0b1c30] hover:bg-[#eff4ff] active:scale-98 transition-all"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <span className="material-symbols-outlined text-[18px] text-[#a33900]">
+                            notifications_active
+                          </span>
+                          <span>{language === 'mr' ? 'थकीत रक्कम सूचना' : 'Pending Dues Notification'}</span>
+                        </span>
+                        <span
+                          className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${
+                            pendingDuesEnabled ? 'bg-[#a33900] justify-end' : 'bg-[#dce9ff] justify-start'
+                          }`}
+                        >
+                          <span className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: '#ffffff' }} />
                         </span>
                       </button>
                     )}

@@ -68,6 +68,7 @@ export interface ExtraItem {
 
 export interface BillingSettings {
   reminderDay: number; // day of month (1-28) to show the billing reminder banner
+  pendingDuesEnabled?: boolean; // show a banner naming customers whose previous month's dues are still unpaid
 }
 
 export interface BillingSentRecord {
