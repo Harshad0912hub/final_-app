@@ -98,6 +98,7 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
 }) => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [filter, setFilter] = useState<'all' | 'pending' | 'done' | 'leave'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [activeMenuCustomer, setActiveMenuCustomer] = useState<Customer | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
@@ -279,8 +280,17 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   const pendingTotalTiffins = Math.max(0, plannedCount - deliveredTotalTiffins - leaveTotalTiffins);
   const todayTotalRevenue = totalCollected + pendingRevenue;
 
-  // Filter cards based on applicable meal sessions
+  // Filter cards based on applicable meal sessions and the search box
   const filteredCustomers = activeCustomers.filter((cust) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        cust.name.toLowerCase().includes(q) ||
+        cust.phone.includes(searchQuery) ||
+        cust.address.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+    }
+
     const rec = dayDeliveries[`${dateKey}_${cust.id}`] || (dateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
     const morningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
     const eveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
@@ -701,6 +711,30 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
           </div>
         </div>
 
+        {/* Search Bar */}
+        <div className="relative w-full mb-2">
+          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5a4138] text-[20px] pointer-events-none">
+            search
+          </span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('searchCustomerPlaceholder')}
+            className="w-full h-11 pl-11 pr-4 rounded-2xl bg-[#ffffff] text-[#0b1c30] placeholder:text-[#5a4138]/60 font-body-md text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#a33900]/40 shadow-sm border border-[#eff4ff]"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#5a4138] hover:text-[#0b1c30]"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          )}
+        </div>
+
         {/* Filter Pills */}
         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           <button
@@ -791,7 +825,10 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             </p>
             <button
               type="button"
-              onClick={() => setFilter('all')}
+              onClick={() => {
+                setFilter('all');
+                setSearchQuery('');
+              }}
               className="mt-3 text-[#a33900] text-[13px] font-bold underline underline-offset-2"
             >
               {t('showAllCustomers')}
