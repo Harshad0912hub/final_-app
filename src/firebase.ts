@@ -12,7 +12,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import { Customer, DayDelivery, PaymentRecord } from './types';
+import { Customer, DayDelivery, Holiday, PaymentRecord } from './types';
 import { getTodayDateKey } from './utils/dateUtils';
 
 // Initialize Firebase App
@@ -77,6 +77,7 @@ export async function testFirestoreConnection(): Promise<boolean> {
 const CUSTOMERS_COLLECTION = 'customers';
 const DELIVERIES_COLLECTION = 'daily_deliveries';
 const PAYMENTS_COLLECTION = 'payments';
+const HOLIDAYS_COLLECTION = 'holidays';
 
 // Customer operations
 export async function saveCustomerToFirestore(customer: Customer): Promise<void> {
@@ -241,6 +242,41 @@ export function subscribeToPayments(onData: (payments: PaymentRecord[]) => void)
   );
 }
 
+// Holidays
+export async function saveHolidayToFirestore(holiday: Holiday): Promise<void> {
+  try {
+    const docRef = doc(db, HOLIDAYS_COLLECTION, holiday.id);
+    await setDoc(docRef, {
+      ...holiday,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${HOLIDAYS_COLLECTION}/${holiday.id}`);
+  }
+}
+
+export async function deleteHolidayFromFirestore(holidayId: string): Promise<void> {
+  try {
+    const docRef = doc(db, HOLIDAYS_COLLECTION, holidayId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${HOLIDAYS_COLLECTION}/${holidayId}`);
+  }
+}
+
+export function subscribeToHolidays(onData: (holidays: Holiday[]) => void): Unsubscribe {
+  const colRef = collection(db, HOLIDAYS_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snap) => {
+      const list: Holiday[] = [];
+      snap.forEach((d) => list.push(d.data() as Holiday));
+      onData(list);
+    },
+    (err) => handleFirestoreError(err, OperationType.LIST, HOLIDAYS_COLLECTION)
+  );
+}
+
 // Clear all Firestore data
 export async function clearFirestoreData(): Promise<void> {
   try {
@@ -253,6 +289,9 @@ export async function clearFirestoreData(): Promise<void> {
 
     const paymentsSnap = await getDocs(collection(db, PAYMENTS_COLLECTION));
     paymentsSnap.forEach((d) => batch.delete(d.ref));
+
+    const holidaysSnap = await getDocs(collection(db, HOLIDAYS_COLLECTION));
+    holidaysSnap.forEach((d) => batch.delete(d.ref));
 
     await batch.commit();
   } catch (err) {

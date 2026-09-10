@@ -45,6 +45,14 @@ export interface PaymentRecord {
   note?: string;
 }
 
+export interface Holiday {
+  id: string;
+  fromDateKey: string;
+  toDateKey: string;
+  reason: string;
+  createdAt?: string;
+}
+
 export type ActiveTab = 'today' | 'customers' | 'reports';
 
 export interface PricePickerState {

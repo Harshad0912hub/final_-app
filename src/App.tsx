@@ -21,6 +21,7 @@ import {
   Customer,
   DayDelivery,
   PaymentRecord,
+  Holiday,
   ActiveTab,
   PricePickerState,
 } from './types';
@@ -39,6 +40,9 @@ import {
   subscribeToPayments,
   savePaymentToFirestore,
   deletePaymentFromFirestore,
+  subscribeToHolidays,
+  saveHolidayToFirestore,
+  deleteHolidayFromFirestore,
   clearFirestoreData,
 } from './firebase';
 
@@ -121,6 +125,15 @@ export default function App() {
     }
   });
 
+  const [holidays, setHolidays] = useState<Holiday[]>(() => {
+    try {
+      const saved = localStorage.getItem('shravani_holidays');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('shravani_customers');
@@ -143,6 +156,7 @@ export default function App() {
     let unsubCustomers: (() => void) | undefined;
     let unsubDeliveries: (() => void) | undefined;
     let unsubPayments: (() => void) | undefined;
+    let unsubHolidays: (() => void) | undefined;
 
     async function connectCloudSync() {
       setIsLoadingCloud(true);
@@ -177,6 +191,11 @@ export default function App() {
             if (!isMounted) return;
             setPayments(remotePayments);
           });
+
+          unsubHolidays = subscribeToHolidays((remoteHolidays) => {
+            if (!isMounted) return;
+            setHolidays(remoteHolidays);
+          });
         }
       } catch (e) {
         console.warn('Firebase live sync skipped or offline:', e);
@@ -191,6 +210,7 @@ export default function App() {
       unsubCustomers?.();
       unsubDeliveries?.();
       unsubPayments?.();
+      unsubHolidays?.();
     };
   }, []);
 
@@ -207,15 +227,21 @@ export default function App() {
     localStorage.setItem('shravani_payments', JSON.stringify(payments));
   }, [payments]);
 
+  useEffect(() => {
+    localStorage.setItem('shravani_holidays', JSON.stringify(holidays));
+  }, [holidays]);
+
   // Handler: Clear All Data
   const handleClearAllData = async () => {
     setCustomers([]);
     setDayDeliveries({});
     setPayments([]);
+    setHolidays([]);
     setSelectedCustomerId('');
     localStorage.removeItem('shravani_customers');
     localStorage.removeItem('shravani_deliveries');
     localStorage.removeItem('shravani_payments');
+    localStorage.removeItem('shravani_holidays');
 
     // Also clear from cloud database
     await clearFirestoreData();
@@ -230,6 +256,7 @@ export default function App() {
       customers,
       dayDeliveries,
       payments,
+      holidays,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -255,6 +282,7 @@ export default function App() {
       const restoredCustomers: Customer[] = parsed.customers;
       const restoredDeliveries: Record<string, DayDelivery> = parsed.dayDeliveries || {};
       const restoredPayments: PaymentRecord[] = Array.isArray(parsed.payments) ? parsed.payments : [];
+      const restoredHolidays: Holiday[] = Array.isArray(parsed.holidays) ? parsed.holidays : [];
 
       // Clear existing cloud data first so restore is a true revert to the
       // backup, not a merge that leaves behind anything added since then.
@@ -263,6 +291,7 @@ export default function App() {
       setCustomers(restoredCustomers);
       setDayDeliveries(restoredDeliveries);
       setPayments(restoredPayments);
+      setHolidays(restoredHolidays);
       setSelectedCustomerId(restoredCustomers.length > 0 ? restoredCustomers[0].id : '');
 
       // Push everything back to the cloud so every device sees the restored data
@@ -270,6 +299,7 @@ export default function App() {
         ...restoredCustomers.map((c) => saveCustomerToFirestore(c)),
         ...Object.values(restoredDeliveries).map((d) => saveDeliveryToFirestore(d.customerId, d)),
         ...restoredPayments.map((p) => savePaymentToFirestore(p)),
+        ...restoredHolidays.map((h) => saveHolidayToFirestore(h)),
       ]);
 
       triggerToast('बॅकअप यशस्वीरित्या पुनर्संचयित झाला!');
@@ -541,63 +571,179 @@ export default function App() {
     }
   };
 
-  // Handler: Mark every active customer's still-pending tiffins (both sessions)
-  // as "leave" for a given day - for festivals/holidays when the business is closed.
-  // Deliveries already recorded that day are left untouched.
-  const handleMarkHoliday = (dateKey: string) => {
-    const activeDateKey = dateKey || getTodayDateKey();
-    const activeCustomers = customers.filter((c) => c.status === 'active');
+  // Applies (or, for days no longer in range, reverts) 'leave' status across
+  // every active customer for a business-wide holiday date range. When
+  // previousFromDateKey/previousToDateKey are given (editing an existing
+  // holiday), any day that was in the old range but isn't in the new one is
+  // reverted back to pending in the same pass. Already-recorded deliveries
+  // are never touched. Returns how many customer-days were actually changed.
+  const applyHolidayRange = (
+    newFromDateKey: string,
+    newToDateKey: string,
+    previousFromDateKey?: string,
+    previousToDateKey?: string
+  ): number => {
+    const activeCustomersList = customers.filter((c) => c.status === 'active');
+    const newKeys = new Set(getDateKeyRange(newFromDateKey, newToDateKey));
+    const oldKeys =
+      previousFromDateKey && previousToDateKey ? getDateKeyRange(previousFromDateKey, previousToDateKey) : [];
+    const allKeys = new Set([...newKeys, ...oldKeys]);
     const updates: Record<string, DayDelivery> = {};
-    let count = 0;
+    let touchedCount = 0;
 
-    activeCustomers.forEach((cust) => {
-      const existing =
-        dayDeliveries[`${activeDateKey}_${cust.id}`] ||
-        (activeDateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined) || {
-          dateKey: activeDateKey,
-          customerId: cust.id,
-          morning: { status: 'pending' as const, price: cust.ratePerTiffin, dietType: cust.dietType || 'veg' },
-          evening: { status: 'pending' as const, price: cust.ratePerTiffin, dietType: cust.dietType || 'veg' },
-        };
-
+    activeCustomersList.forEach((cust) => {
       const morningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'morning';
       const eveningApplicable = cust.mealTiming === 'both' || cust.mealTiming === 'night';
 
-      const updated: DayDelivery = { ...existing, dateKey: activeDateKey, customerId: cust.id };
-      let touched = false;
+      allKeys.forEach((activeDateKey) => {
+        const isInNewRange = newKeys.has(activeDateKey);
+        const existing =
+          dayDeliveries[`${activeDateKey}_${cust.id}`] ||
+          (activeDateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined) || {
+            dateKey: activeDateKey,
+            customerId: cust.id,
+            morning: { status: 'pending' as const, price: cust.ratePerTiffin, dietType: cust.dietType || 'veg' },
+            evening: { status: 'pending' as const, price: cust.ratePerTiffin, dietType: cust.dietType || 'veg' },
+          };
 
-      if (morningApplicable && (existing.morning?.status || 'pending') === 'pending') {
-        updated.morning = {
-          status: 'leave',
-          price: existing.morning?.price ?? cust.ratePerTiffin,
-          dietType: existing.morning?.dietType || cust.dietType || 'veg',
-        };
-        touched = true;
-      }
-      if (eveningApplicable && (existing.evening?.status || 'pending') === 'pending') {
-        updated.evening = {
-          status: 'leave',
-          price: existing.evening?.price ?? cust.ratePerTiffin,
-          dietType: existing.evening?.dietType || cust.dietType || 'veg',
-        };
-        touched = true;
-      }
+        const updated: DayDelivery = { ...existing, dateKey: activeDateKey, customerId: cust.id };
+        let touched = false;
 
-      if (!touched) return;
+        if (isInNewRange) {
+          if (morningApplicable && (existing.morning?.status || 'pending') === 'pending') {
+            updated.morning = {
+              status: 'leave',
+              price: existing.morning?.price ?? cust.ratePerTiffin,
+              dietType: existing.morning?.dietType || cust.dietType || 'veg',
+            };
+            touched = true;
+          }
+          if (eveningApplicable && (existing.evening?.status || 'pending') === 'pending') {
+            updated.evening = {
+              status: 'leave',
+              price: existing.evening?.price ?? cust.ratePerTiffin,
+              dietType: existing.evening?.dietType || cust.dietType || 'veg',
+            };
+            touched = true;
+          }
+        } else {
+          if (morningApplicable && existing.morning?.status === 'leave') {
+            updated.morning = { ...existing.morning, status: 'pending' };
+            touched = true;
+          }
+          if (eveningApplicable && existing.evening?.status === 'leave') {
+            updated.evening = { ...existing.evening, status: 'pending' };
+            touched = true;
+          }
+        }
 
-      updates[`${activeDateKey}_${cust.id}`] = updated;
-      if (activeDateKey === getTodayDateKey()) updates[cust.id] = updated;
-      count++;
+        if (!touched) return;
 
-      saveDeliveryToFirestore(cust.id, updated).catch((err) =>
-        console.warn('Holiday leave save to cloud skipped:', err)
-      );
+        updates[`${activeDateKey}_${cust.id}`] = updated;
+        if (activeDateKey === getTodayDateKey()) updates[cust.id] = updated;
+        touchedCount++;
+
+        saveDeliveryToFirestore(cust.id, updated).catch((err) =>
+          console.warn('Holiday delivery save to cloud skipped:', err)
+        );
+      });
     });
 
-    if (count > 0) {
+    if (Object.keys(updates).length > 0) {
       setDayDeliveries((prev) => ({ ...prev, ...updates }));
-      triggerToast(`सुट्टी नोंदवली! ${count} ग्राहकांचे आजचे डबे रद्द केले. 🎉`);
     }
+    return touchedCount;
+  };
+
+  // Reverts a date range's 'leave' days (across every active customer) back
+  // to pending - used when cancelling a holiday entirely.
+  const clearHolidayRangeForAllCustomers = (fromDateKey: string, toDateKey: string): number => {
+    const activeCustomersList = customers.filter((c) => c.status === 'active');
+    const dateKeys = getDateKeyRange(fromDateKey, toDateKey);
+    const updates: Record<string, DayDelivery> = {};
+    let count = 0;
+
+    activeCustomersList.forEach((cust) => {
+      dateKeys.forEach((activeDateKey) => {
+        const existing =
+          dayDeliveries[`${activeDateKey}_${cust.id}`] ||
+          (activeDateKey === getTodayDateKey() ? dayDeliveries[cust.id] : undefined);
+        if (!existing) return;
+
+        const updated: DayDelivery = { ...existing, dateKey: activeDateKey, customerId: cust.id };
+        let touched = false;
+
+        if (existing.morning?.status === 'leave') {
+          updated.morning = { ...existing.morning, status: 'pending' };
+          touched = true;
+        }
+        if (existing.evening?.status === 'leave') {
+          updated.evening = { ...existing.evening, status: 'pending' };
+          touched = true;
+        }
+
+        if (!touched) return;
+
+        updates[`${activeDateKey}_${cust.id}`] = updated;
+        if (activeDateKey === getTodayDateKey()) updates[cust.id] = updated;
+        count++;
+
+        saveDeliveryToFirestore(cust.id, updated).catch((err) =>
+          console.warn('Holiday-cancel delivery save to cloud skipped:', err)
+        );
+      });
+    });
+
+    if (Object.keys(updates).length > 0) {
+      setDayDeliveries((prev) => ({ ...prev, ...updates }));
+    }
+    return count;
+  };
+
+  // Handler: Declare a new business-wide holiday across a date range with a
+  // reason (festival name etc.) - marks every active customer's still-pending
+  // tiffins in that range as leave.
+  const handleDeclareHoliday = (fromDateKey: string, toDateKey: string, reason: string) => {
+    const count = applyHolidayRange(fromDateKey, toDateKey);
+    const holiday: Holiday = {
+      id: `holiday-${Date.now()}`,
+      fromDateKey,
+      toDateKey,
+      reason,
+      createdAt: new Date().toISOString(),
+    };
+    setHolidays((prev) => [...prev, holiday]);
+    saveHolidayToFirestore(holiday).catch((err) => console.warn('Holiday save to cloud skipped:', err));
+    triggerToast(
+      count > 0
+        ? `सुट्टी जाहीर केली! ${count} नोंदी अद्ययावत झाल्या. 🎉`
+        : 'सुट्टी जाहीर केली, पण नोंदवण्यासारखे प्रलंबित डबे सापडले नाहीत.'
+    );
+  };
+
+  // Handler: Edit a previously declared holiday's dates/reason.
+  const handleEditHoliday = (holidayId: string, newFromDateKey: string, newToDateKey: string, newReason: string) => {
+    const existing = holidays.find((h) => h.id === holidayId);
+    if (!existing) return;
+
+    applyHolidayRange(newFromDateKey, newToDateKey, existing.fromDateKey, existing.toDateKey);
+
+    const updated: Holiday = { ...existing, fromDateKey: newFromDateKey, toDateKey: newToDateKey, reason: newReason };
+    setHolidays((prev) => prev.map((h) => (h.id === holidayId ? updated : h)));
+    saveHolidayToFirestore(updated).catch((err) => console.warn('Holiday update to cloud skipped:', err));
+    triggerToast('सुट्टी अद्ययावत केली!');
+  };
+
+  // Handler: Cancel a declared holiday entirely, reverting its date range's
+  // leave days back to pending.
+  const handleCancelHoliday = (holidayId: string) => {
+    const existing = holidays.find((h) => h.id === holidayId);
+    if (!existing) return;
+
+    clearHolidayRangeForAllCustomers(existing.fromDateKey, existing.toDateKey);
+    setHolidays((prev) => prev.filter((h) => h.id !== holidayId));
+    deleteHolidayFromFirestore(holidayId).catch((err) => console.warn('Holiday delete from cloud skipped:', err));
+    triggerToast('सुट्टी रद्द केली.');
   };
 
   // Handler: Mark one customer's pending tiffins (both sessions, whichever
@@ -948,7 +1094,10 @@ export default function App() {
             }}
             onDeleteCustomer={handleDeleteCustomer}
             onBatchMarkSession={handleBatchMarkSession}
-            onMarkHoliday={handleMarkHoliday}
+            holidays={holidays}
+            onDeclareHoliday={handleDeclareHoliday}
+            onEditHoliday={handleEditHoliday}
+            onCancelHoliday={handleCancelHoliday}
           />
         ) : activeTab === 'customers' ? (
           <CustomersScreen

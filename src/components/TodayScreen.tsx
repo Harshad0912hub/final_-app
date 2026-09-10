@@ -1,7 +1,26 @@
 import React, { useState } from 'react';
-import { Customer, DayDelivery } from '../types';
+import { Customer, DayDelivery, Holiday } from '../types';
 import { useLanguage } from '../utils/LanguageContext';
 import { formatDateKey, getTodayDateKey } from '../utils/dateUtils';
+
+// Helper: build the WhatsApp holiday-announcement message for one customer
+function buildHolidayBroadcastMsg(
+  custName: string,
+  reason: string,
+  fromStr: string,
+  toStr: string,
+  sameDay: boolean,
+  language: string
+): string {
+  if (language === 'mr') {
+    return sameDay
+      ? `नमस्कार ${custName}जी! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${reason} निमित्त आज (${fromStr}) आमचे टिफीन सेंटर बंद राहील.\nगैरसोयीबद्दल दिलगीर आहोत. धन्यवाद! 🙏`
+      : `नमस्कार ${custName}जी! 🙏\n*श्रावणी टिफीन सेंटर*\n\n${reason} निमित्त ${fromStr} ते ${toStr} या कालावधीत आमचे टिफीन सेंटर बंद राहील.\nगैरसोयीबद्दल दिलगीर आहोत. धन्यवाद! 🙏`;
+  }
+  return sameDay
+    ? `Hello ${custName}! 🙏\n*Shravani Tiffin Center*\n\nDue to ${reason}, our tiffin center will remain closed today (${fromStr}).\nSorry for the inconvenience. Thank you! 🙏`
+    : `Hello ${custName}! 🙏\n*Shravani Tiffin Center*\n\nDue to ${reason}, our tiffin center will remain closed from ${fromStr} to ${toStr}.\nSorry for the inconvenience. Thank you! 🙏`;
+}
 
 // Helper: build per-customer WhatsApp delivery message
 function buildWhatsAppMsg(custName: string, session: 'morning' | 'evening', dateFull: string, price: number, language: string): string {
@@ -18,7 +37,10 @@ interface TodayScreenProps {
   onOpenPricePicker: (customer: Customer, session: 'morning' | 'evening', dateKey: string, formattedDateStr?: string) => void;
   onAddFirstCustomer: () => void;
   onBatchMarkSession?: (session: 'morning' | 'evening', dateKey: string) => void;
-  onMarkHoliday?: (dateKey: string) => void;
+  holidays?: Holiday[];
+  onDeclareHoliday?: (fromDateKey: string, toDateKey: string, reason: string) => void;
+  onEditHoliday?: (holidayId: string, fromDateKey: string, toDateKey: string, reason: string) => void;
+  onCancelHoliday?: (holidayId: string) => void;
   onOpenEditModal?: (customer: Customer) => void;
   onDeleteCustomer?: (customerId: string) => void;
 }
@@ -29,7 +51,10 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   onOpenPricePicker,
   onAddFirstCustomer,
   onBatchMarkSession,
-  onMarkHoliday,
+  holidays = [],
+  onDeclareHoliday,
+  onEditHoliday,
+  onCancelHoliday,
   onOpenEditModal,
   onDeleteCustomer,
 }) => {
@@ -38,7 +63,16 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [activeMenuCustomer, setActiveMenuCustomer] = useState<Customer | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
-  const [showHolidayConfirm, setShowHolidayConfirm] = useState(false);
+  const [holidayModal, setHolidayModal] = useState<{
+    mode: 'declare' | 'edit';
+    holidayId?: string;
+    from: string;
+    to: string;
+    reason: string;
+  } | null>(null);
+  const [holidayToCancel, setHolidayToCancel] = useState<Holiday | null>(null);
+  const [broadcastHoliday, setBroadcastHoliday] = useState<Holiday | null>(null);
+  const [broadcastIndex, setBroadcastIndex] = useState(0);
   const [showMenuCard, setShowMenuCard] = useState(false);
   const [todaysMenu, setTodaysMenu] = useState<{ morning: string; evening: string }>(() => {
     try {
@@ -55,6 +89,20 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
 
   const { dayName, dateFull } = formatDate(currentDate);
   const dateKey = formatDateKey(currentDate);
+
+  const parseDateKeyToDate = (key: string): Date => {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const formatHolidayRange = (fromKey: string, toKey: string): string => {
+    const fromStr = formatDate(parseDateKeyToDate(fromKey)).dateFull;
+    if (fromKey === toKey) return fromStr;
+    const toStr = formatDate(parseDateKeyToDate(toKey)).dateFull;
+    return `${fromStr} ${language === 'mr' ? 'ते' : 'to'} ${toStr}`;
+  };
+
+  const holidayForViewedDay = holidays.find((h) => dateKey >= h.fromDateKey && dateKey <= h.toDateKey);
 
   const handlePrevDay = () => {
     const next = new Date(currentDate);
@@ -418,15 +466,68 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             </button>
           </div>
 
-          {/* Holiday: mark everyone on leave for the day (festivals, business closed etc.) */}
-          {(pendingMorningCustomers.length > 0 || pendingEveningCustomers.length > 0) && (
+          {/* Holiday: business-wide closure for a date range (festivals etc.) */}
+          {holidayForViewedDay ? (
+            <div className="mt-2 w-full rounded-xl border-2 border-[#8d4b00] bg-[#8d4b00]/10 p-2.5 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] text-[#8d4b00] shrink-0">event_busy</span>
+                <div className="min-w-0">
+                  <p className="font-label-md text-[12px] font-bold text-[#6e3900] truncate">
+                    {holidayForViewedDay.reason}
+                  </p>
+                  <p className="font-body-sm text-[11px] text-[#8d4b00]">
+                    {formatHolidayRange(holidayForViewedDay.fromDateKey, holidayForViewedDay.toDateKey)}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setHolidayModal({
+                      mode: 'edit',
+                      holidayId: holidayForViewedDay.id,
+                      from: holidayForViewedDay.fromDateKey,
+                      to: holidayForViewedDay.toDateKey,
+                      reason: holidayForViewedDay.reason,
+                    })
+                  }
+                  className="h-9 rounded-lg bg-white text-[#6e3900] font-label-sm text-[11px] font-bold border border-[#8d4b00]/40 hover:bg-[#ffdcc3] active:scale-95 transition-all flex items-center justify-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[14px]">edit</span>
+                  {language === 'mr' ? 'संपादन' : 'Edit'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHolidayToCancel(holidayForViewedDay)}
+                  className="h-9 rounded-lg bg-white text-[#ba1a1a] font-label-sm text-[11px] font-bold border border-[#ba1a1a]/30 hover:bg-[#ffdad6] active:scale-95 transition-all flex items-center justify-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[14px]">cancel</span>
+                  {language === 'mr' ? 'रद्द करा' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBroadcastHoliday(holidayForViewedDay);
+                    setBroadcastIndex(0);
+                  }}
+                  className="h-9 rounded-lg bg-[#25D366] text-white font-label-sm text-[11px] font-bold hover:bg-[#1EBE5D] active:scale-95 transition-all flex items-center justify-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[14px]">chat</span>
+                  WhatsApp
+                </button>
+              </div>
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => setShowHolidayConfirm(true)}
+              onClick={() =>
+                setHolidayModal({ mode: 'declare', from: dateKey, to: dateKey, reason: '' })
+              }
               className="mt-2 w-full h-10 rounded-xl flex items-center justify-center gap-1.5 font-label-md text-[12px] font-bold border-2 border-dashed border-[#8d4b00] text-[#8d4b00] hover:bg-[#8d4b00]/10 active:scale-95 transition-all"
             >
               <span className="material-symbols-outlined text-[16px]">event_busy</span>
-              <span>{language === 'mr' ? 'आज सर्व सुट्टी (सण/उत्सव)' : "Holiday - Everyone's On Leave Today"}</span>
+              <span>{language === 'mr' ? 'सुट्टी जाहीर करा (सण/उत्सव)' : 'Declare Holiday (Festival/Event)'}</span>
             </button>
           )}
         </section>
@@ -901,8 +1002,8 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         </div>
       )}
 
-      {/* Holiday Confirmation Modal */}
-      {showHolidayConfirm && (
+      {/* Declare / Edit Holiday Modal */}
+      {holidayModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center space-y-3.5 border border-[#eff4ff]">
             <div className="w-14 h-14 rounded-full bg-[#8d4b00]/10 text-[#8d4b00] flex items-center justify-center shadow-inner">
@@ -910,18 +1011,107 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             </div>
             <div>
               <h4 className="font-headline-sm text-[18px] text-[#0b1c30] font-bold">
-                {language === 'mr' ? 'आजची सर्व सुट्टी नोंदवायची?' : 'Mark everyone on leave today?'}
+                {holidayModal.mode === 'edit'
+                  ? (language === 'mr' ? 'सुट्टी संपादित करा' : 'Edit Holiday')
+                  : (language === 'mr' ? 'सुट्टी जाहीर करा' : 'Declare Holiday')}
               </h4>
               <p className="font-body-sm text-[13px] text-[#5a4138] mt-1.5 leading-relaxed">
                 {language === 'mr'
-                  ? `${pendingMorningCustomers.length + pendingEveningCustomers.length} प्रलंबित डबे सुट्टी म्हणून नोंदवले जातील. आधीच दिलेले डबे बदलले जाणार नाहीत.`
-                  : `${pendingMorningCustomers.length + pendingEveningCustomers.length} pending tiffins will be marked as leave. Deliveries already recorded today won't be changed.`}
+                  ? 'या कालावधीतील सर्व सक्रिय ग्राहकांचे प्रलंबित डबे सुट्टी म्हणून नोंदवले जातील.'
+                  : "All active customers' pending tiffins in this range will be marked as leave."}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 w-full">
+              <label className="flex flex-col gap-1 text-left">
+                <span className="font-label-sm text-[11px] text-[#5a4138] font-semibold">
+                  {language === 'mr' ? 'पासून' : 'From'}
+                </span>
+                <input
+                  type="date"
+                  value={holidayModal.from}
+                  onChange={(e) => setHolidayModal({ ...holidayModal, from: e.target.value })}
+                  className="h-10 px-2 rounded-xl bg-[#eff4ff] text-[#0b1c30] text-[13px] border border-[#dce9ff] focus:outline-none focus:ring-2 focus:ring-[#a33900]/30"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-left">
+                <span className="font-label-sm text-[11px] text-[#5a4138] font-semibold">
+                  {language === 'mr' ? 'पर्यंत' : 'To'}
+                </span>
+                <input
+                  type="date"
+                  value={holidayModal.to}
+                  onChange={(e) => setHolidayModal({ ...holidayModal, to: e.target.value })}
+                  className="h-10 px-2 rounded-xl bg-[#eff4ff] text-[#0b1c30] text-[13px] border border-[#dce9ff] focus:outline-none focus:ring-2 focus:ring-[#a33900]/30"
+                />
+              </label>
+            </div>
+            <label className="flex flex-col gap-1 text-left w-full">
+              <span className="font-label-sm text-[11px] text-[#5a4138] font-semibold">
+                {language === 'mr' ? 'कारण (उदा. दिवाळी, गणपती)' : 'Reason (e.g. Diwali, Ganpati)'}
+              </span>
+              <input
+                type="text"
+                value={holidayModal.reason}
+                onChange={(e) => setHolidayModal({ ...holidayModal, reason: e.target.value })}
+                placeholder={language === 'mr' ? 'उदा. दिवाळी सुट्टी' : 'e.g. Diwali break'}
+                className="h-10 px-3 rounded-xl bg-[#eff4ff] text-[#0b1c30] text-[13px] border border-[#dce9ff] focus:outline-none focus:ring-2 focus:ring-[#a33900]/30"
+              />
+            </label>
+            <div className="flex gap-2 w-full pt-1">
+              <button
+                type="button"
+                onClick={() => setHolidayModal(null)}
+                className="flex-1 h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-lg text-[14px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                disabled={!holidayModal.from || !holidayModal.to || !holidayModal.reason.trim()}
+                onClick={() => {
+                  if (holidayModal.mode === 'edit' && holidayModal.holidayId) {
+                    onEditHoliday?.(holidayModal.holidayId, holidayModal.from, holidayModal.to, holidayModal.reason.trim());
+                  } else {
+                    onDeclareHoliday?.(holidayModal.from, holidayModal.to, holidayModal.reason.trim());
+                  }
+                  setHolidayModal(null);
+                }}
+                className="flex-1 h-11 rounded-full bg-[#8d4b00] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#6e3900] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[18px]">event_busy</span>
+                <span>
+                  {holidayModal.mode === 'edit'
+                    ? (language === 'mr' ? 'अद्ययावत करा' : 'Update')
+                    : (language === 'mr' ? 'जाहीर करा' : 'Declare')}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Holiday Confirmation Modal */}
+      {holidayToCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center space-y-3.5 border border-[#eff4ff]">
+            <div className="w-14 h-14 rounded-full bg-[#ffdad6] text-[#93000a] flex items-center justify-center shadow-inner">
+              <span className="material-symbols-outlined text-[28px]">cancel</span>
+            </div>
+            <div>
+              <h4 className="font-headline-sm text-[18px] text-[#0b1c30] font-bold">
+                {language === 'mr' ? 'सुट्टी रद्द करायची?' : 'Cancel this holiday?'}
+              </h4>
+              <p className="font-body-sm text-[13px] text-[#5a4138] mt-1.5 leading-relaxed">
+                <strong className="text-[#0b1c30] font-semibold">{holidayToCancel.reason}</strong>
+                {language === 'mr'
+                  ? ` (${formatHolidayRange(holidayToCancel.fromDateKey, holidayToCancel.toDateKey)}) - या कालावधीतील सुट्टी नोंदी पूर्ववत (प्रलंबित) केल्या जातील.`
+                  : ` (${formatHolidayRange(holidayToCancel.fromDateKey, holidayToCancel.toDateKey)}) - leave records in this range will be reverted back to pending.`}
               </p>
             </div>
             <div className="flex gap-2 w-full pt-1">
               <button
                 type="button"
-                onClick={() => setShowHolidayConfirm(false)}
+                onClick={() => setHolidayToCancel(null)}
                 className="flex-1 h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-lg text-[14px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
               >
                 {t('cancel')}
@@ -929,18 +1119,92 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  onMarkHoliday?.(dateKey);
-                  setShowHolidayConfirm(false);
+                  onCancelHoliday?.(holidayToCancel.id);
+                  setHolidayToCancel(null);
                 }}
-                className="flex-1 h-11 rounded-full bg-[#8d4b00] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#6e3900] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 h-11 rounded-full bg-[#ba1a1a] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#93000a] active:scale-95 transition-all flex items-center justify-center gap-1.5"
               >
-                <span className="material-symbols-outlined text-[18px]">event_busy</span>
-                <span>{language === 'mr' ? 'होय, सुट्टी नोंदवा' : 'Yes, Mark Leave'}</span>
+                <span className="material-symbols-outlined text-[18px]">cancel</span>
+                <span>{language === 'mr' ? 'होय, रद्द करा' : 'Yes, Cancel'}</span>
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* WhatsApp Holiday Broadcast Modal */}
+      {broadcastHoliday && (() => {
+        const broadcastList = activeCustomers;
+        const total = broadcastList.length;
+        const current = broadcastList[broadcastIndex];
+        const sameDay = broadcastHoliday.fromDateKey === broadcastHoliday.toDateKey;
+        const fromStr = formatDate(parseDateKeyToDate(broadcastHoliday.fromDateKey)).dateFull;
+        const toStr = formatDate(parseDateKeyToDate(broadcastHoliday.toDateKey)).dateFull;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center text-center space-y-3.5 border border-[#eff4ff]">
+              <div className="w-14 h-14 rounded-full bg-[#25D366]/15 text-[#1EBE5D] flex items-center justify-center shadow-inner">
+                <span className="material-symbols-outlined text-[28px]">chat</span>
+              </div>
+              {total === 0 ? (
+                <p className="font-body-md text-[13px] text-[#5a4138]">
+                  {language === 'mr' ? 'कोणतेही सक्रिय ग्राहक नाहीत.' : 'No active customers.'}
+                </p>
+              ) : (
+                <>
+                  <div>
+                    <h4 className="font-headline-sm text-[18px] text-[#0b1c30] font-bold">
+                      {language === 'mr' ? 'सुट्टीचा निरोप पाठवा' : 'Send Holiday Notice'}
+                    </h4>
+                    <p className="font-label-sm text-[11px] text-[#5a4138] mt-1">
+                      {language === 'mr' ? 'ग्राहक' : 'Customer'} {broadcastIndex + 1} / {total}
+                    </p>
+                  </div>
+                  <div className="w-full bg-[#eff4ff] rounded-xl p-3">
+                    <p className="font-headline-sm text-[15px] text-[#0b1c30] font-bold">{current.name}</p>
+                    <p className="font-body-sm text-[12px] text-[#5a4138]">+91 {current.phone}</p>
+                  </div>
+                  <div className="flex gap-2 w-full pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastHoliday(null)}
+                      className="flex-1 h-11 rounded-full bg-[#eff4ff] text-[#0b1c30] font-label-lg text-[14px] font-semibold hover:bg-[#dce9ff] active:scale-95 transition-all"
+                    >
+                      {language === 'mr' ? 'बंद करा' : 'Close'}
+                    </button>
+                    <a
+                      href={`https://wa.me/91${current.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                        buildHolidayBroadcastMsg(current.name, broadcastHoliday.reason, fromStr, toStr, sameDay, language)
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        if (broadcastIndex < total - 1) {
+                          setTimeout(() => setBroadcastIndex((i) => i + 1), 400);
+                        }
+                      }}
+                      className="flex-1 h-11 rounded-full bg-[#25D366] text-white font-label-lg text-[14px] font-bold shadow-md hover:bg-[#1EBE5D] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">chat</span>
+                      <span>{language === 'mr' ? 'WhatsApp उघडा' : 'Open WhatsApp'}</span>
+                    </a>
+                  </div>
+                  {broadcastIndex < total - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setBroadcastIndex((i) => i + 1)}
+                      className="w-full h-9 rounded-full text-[#5a4138] font-label-sm text-[12px] font-semibold hover:bg-[#eff4ff] active:scale-95 transition-all"
+                    >
+                      {language === 'mr' ? 'हा ग्राहक वगळा, पुढे जा →' : 'Skip this customer, next →'}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Delete Confirmation Modal */}
       {customerToDelete && (

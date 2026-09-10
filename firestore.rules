@@ -11,6 +11,9 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow read, write: if true;
     }
+    match /holidays/{holidayId} {
+      allow read, write: if true;
+    }
     match /{document=**} {
       allow read, write: if false;
     }

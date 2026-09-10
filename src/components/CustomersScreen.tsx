@@ -80,6 +80,12 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
       c.address.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Under "All", on-leave customers get their own dedicated, clearly labeled
+  // section instead of being mixed in with everyone else - so exclude them
+  // from the regular Active list there to avoid showing each one twice.
+  const activeListForDisplay =
+    filter === 'all' ? filteredActive.filter((c) => !leaveRangeByCustomerId[c.id]) : filteredActive;
+
   const hasAnyMatches =
     filter === 'all'
       ? filteredActive.length > 0 || filteredInactive.length > 0
@@ -251,13 +257,13 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
       )}
 
       {/* 3. Active Customers Section */}
-      {(filter === 'all' || filter === 'active') && filteredActive.length > 0 && (
+      {(filter === 'all' || filter === 'active') && activeListForDisplay.length > 0 && (
         <section className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <h3 className="font-headline-sm text-[16px] text-[#0b1c30] font-bold flex items-center gap-1.5">
               <span>{t('activeCustomers')}</span>
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#7cf994] text-[#007230] font-bold">
-                {formatNum(filteredActive.length)}
+                {formatNum(activeListForDisplay.length)}
               </span>
             </h3>
             <span className="font-label-sm text-[11px] text-[#5a4138]">
@@ -267,7 +273,7 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
 
           {/* Active Cards Stack */}
           <div className="space-y-2.5">
-            {filteredActive.map((cust) => (
+            {activeListForDisplay.map((cust) => (
               <article
                 key={cust.id}
                 className="bg-[#ffffff] rounded-2xl p-3.5 shadow-sm transition-all relative overflow-hidden border border-[#eff4ff]"
@@ -419,7 +425,7 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
       )}
 
       {/* On Leave Section (dedicated filter view) */}
-      {filter === 'leave' && filteredOnLeave.length > 0 && (
+      {(filter === 'all' || filter === 'leave') && filteredOnLeave.length > 0 && (
         <section className="space-y-2">
           <div className="flex items-center justify-between px-1">
             <h3 className="font-headline-sm text-[16px] text-[#0b1c30] font-bold flex items-center gap-1.5">
