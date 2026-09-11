@@ -152,10 +152,10 @@ export const Header: React.FC<HeaderProps> = ({
               {showMenu && (
                 <>
                   <div
-                    className="fixed inset-0 z-40"
+                    className="fixed inset-0 z-[55]"
                     onClick={() => setShowMenu(false)}
                   />
-                  <div className="absolute right-0 top-11 z-50 w-60 bg-white rounded-2xl shadow-xl border border-[#eff4ff] p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="absolute right-0 top-11 z-[60] w-60 bg-white rounded-2xl shadow-xl border border-[#eff4ff] p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150">
                     <div className="px-3 py-1.5 border-b border-[#eff4ff]">
                       <p className="text-[11px] text-[#5a4138] font-medium">{t('dataManagement')}</p>
                       <p className="text-[12px] font-bold text-[#0b1c30]">
