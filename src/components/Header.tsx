@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useLanguage } from '../utils/LanguageContext';
+import { generateUserManualPDF } from '../utils/pdfGenerator';
 
 interface HeaderProps {
   onClearAllData?: () => void;
@@ -287,6 +288,19 @@ export const Header: React.FC<HeaderProps> = ({
                         <span>{language === 'mr' ? 'सर्व ग्राहकांची बाकी पुन्हा मोजा' : "Recalculate All Customers' Dues"}</span>
                       </button>
                     )}
+
+                    {/* User Manual PDF */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMenu(false);
+                        generateUserManualPDF();
+                      }}
+                      className="flex items-center gap-2.5 px-3 py-2 text-left rounded-xl text-[13px] font-semibold text-[#0b1c30] hover:bg-[#eff4ff] active:scale-98 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[18px] text-[#006e2d]">menu_book</span>
+                      <span>{language === 'mr' ? 'युजर मॅन्युअल (PDF)' : 'User Manual (PDF)'}</span>
+                    </button>
 
                     {/* Install App button if not already running standalone */}
                     {!isInstalled && onInstallPWA && (

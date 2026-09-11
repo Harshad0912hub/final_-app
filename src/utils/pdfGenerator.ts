@@ -511,3 +511,162 @@ export function generateMonthlyCrossCheckPDF(
 
   doc.save(`Shravani_Tiffin_Monthly_CrossCheck_${monthStr ? monthStr.replace(/\s+/g, '_') : 'Report'}.pdf`);
 }
+
+interface ManualSection {
+  title: string;
+  steps: string[];
+}
+
+const USER_MANUAL_SECTIONS: ManualSection[] = [
+  {
+    title: '1. Adding a Customer',
+    steps: [
+      'Go to the "Customers" tab (bottom navigation) and tap "+ New Customer".',
+      'Fill in name, phone number, address, meal timing (Morning / Night / Both), diet, and rate per tiffin.',
+      'Tap "Save Customer" - they immediately appear on the Today screen for delivery marking.',
+    ],
+  },
+  {
+    title: '2. Marking Today\'s Delivery',
+    steps: [
+      'On the "Today" tab, each customer card has a Morning and/or Evening button.',
+      'Tap it to open the price picker - confirm the rate, veg/non-veg, and tap "Mark Delivered".',
+      'To undo a delivered mark, tap the green delivered pill again and choose "Clear Mark".',
+      'Use "Mark All Morning Done" / "Mark All Evening Done" to mark everyone at once (tap again to undo all).',
+    ],
+  },
+  {
+    title: '3. Adding Extras (Extra Chapati, Extra Tiffin, etc.)',
+    steps: [
+      'While marking a delivery, tap "Select Extras" in the price picker.',
+      'Pick from your saved extra items, or tap "+ Add New Extra" to create a new one (name + price) - it is saved forever for future use.',
+      'The extra\'s price is automatically added to that day\'s total, and shown separately on the bill.',
+    ],
+  },
+  {
+    title: '4. Marking Leave / Declaring a Holiday',
+    steps: [
+      'For one customer going on leave for some days: open their card menu and choose "Mark Leave", pick the date range.',
+      'For a business-wide holiday (affecting every customer): use "Declare Holiday" on the Today screen, pick dates and a reason - you can broadcast it to all customers over WhatsApp with one tap.',
+      'Both can be edited or cancelled later from the same place.',
+    ],
+  },
+  {
+    title: '5. Searching for a Customer',
+    steps: [
+      'Both the "Today" and "Customers" tabs have a search box near the top.',
+      'Type a name, phone number, or address to instantly filter the list - useful once you have many customers.',
+    ],
+  },
+  {
+    title: '6. Recording a Payment (Advance)',
+    steps: [
+      'Go to "Reports" tab, select the customer, and tap "+ Add Advance".',
+      'Enter the amount and payment method (Cash / Google Pay / Bank) and save.',
+      'The customer\'s "Balance Due" updates immediately and stays accurate across every month.',
+    ],
+  },
+  {
+    title: '7. Sending a Bill (WhatsApp or PDF)',
+    steps: [
+      'In "Reports", select the customer and month, then tap the green "Send Bill via WhatsApp" button.',
+      'Review the message, edit if needed, and tap the WhatsApp button to open a chat with it pre-filled.',
+      'Tap "Download PDF Bill" for a printable/shareable PDF version of the same bill.',
+    ],
+  },
+  {
+    title: '8. Notifications',
+    steps: [
+      'The bell icon in the header shows a red badge when there is something to see.',
+      'Tap it for two kinds of alerts: "It\'s billing day" (customers not yet sent this month\'s bill) and "Currently pending amount" (customers who owe money right now).',
+      'Tapping a customer\'s name inside jumps straight to their Reports page.',
+      'Both can be turned on/off, and the billing reminder date can be changed, from the header menu (tap the three dots, top-right).',
+    ],
+  },
+  {
+    title: '9. Other Settings (tap the three-dot menu, top-right)',
+    steps: [
+      'Dark Mode and Large Text - for comfortable viewing.',
+      'Download Backup - saves everything (customers, deliveries, payments) as one file, useful before making big changes.',
+      'Restore Backup - loads a previously downloaded backup file, replacing current data.',
+      '"Recalculate All Customers\' Dues" - a safety button that re-checks every customer\'s balance from scratch, in case anything ever looks off.',
+    ],
+  },
+];
+
+/**
+ * Generates and downloads a plain-English "how to use this app" User Manual
+ * PDF. jsPDF's built-in font cannot render Devanagari script, so this stays
+ * in English even though the app's own interface is bilingual.
+ */
+export function generateUserManualPDF() {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginX = 16;
+  const contentWidth = pageWidth - marginX * 2;
+  let y = 0;
+
+  const drawHeaderBanner = (subtitle: string) => {
+    doc.setFillColor(163, 57, 0);
+    doc.rect(0, 0, pageWidth, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('SHRAVANI TIFFIN CENTER', pageWidth / 2, 14, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10.5);
+    doc.text(subtitle, pageWidth / 2, 22, { align: 'center' });
+    return 40;
+  };
+
+  const ensureRoom = (needed: number) => {
+    if (y + needed > pageHeight - 16) {
+      doc.addPage();
+      y = drawHeaderBanner('User Guide (continued)');
+    }
+  };
+
+  y = drawHeaderBanner('User Guide - How to Use This App');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  const intro = doc.splitTextToSize(
+    'This guide covers everything you need for day-to-day use: adding customers, marking daily deliveries, ' +
+      'extras, leave/holidays, payments, sending bills, and notifications.',
+    contentWidth
+  );
+  doc.text(intro, marginX, y);
+  y += intro.length * 5 + 6;
+
+  USER_MANUAL_SECTIONS.forEach((section) => {
+    ensureRoom(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12.5);
+    doc.setTextColor(163, 57, 0);
+    doc.text(section.title, marginX, y);
+    y += 7;
+
+    section.steps.forEach((step) => {
+      const lines: string[] = doc.splitTextToSize(step, contentWidth - 6);
+      ensureRoom(lines.length * 5 + 2);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(30, 30, 30);
+      doc.text('•', marginX + 1, y);
+      doc.text(lines, marginX + 6, y);
+      y += lines.length * 5 + 1.5;
+    });
+
+    y += 5;
+  });
+
+  ensureRoom(14);
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text('For any questions about using this app, contact the developer.', marginX, y);
+
+  doc.save('Shravani_Tiffin_User_Manual.pdf');
+}
