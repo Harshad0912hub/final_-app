@@ -402,7 +402,7 @@ Thank you!
           <img
             alt="घरगुती स्वच्छ जेवण"
             className="w-full h-full object-cover"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBpcbTXk_-KjmxjcdhTvaUYQsEXYT_xR76iKERf6D4m4lhoD7U8-_pchDFqcgsj5X6v8pXJhQWSutsST9aQCkkybLI5aX99BlhTAHUeEhgPIkkaWtdMWKDLTwJzM5AItzhr2BSKHlc60C3Eun34vJZQYs4jzkJfZ0EYZyfW9ke_DOZ6dYxATogsYMYZ6Mj0P3FsElnXz3eKU5vZDkGIXU9pod4vJHQaLiOHC01Ilxjv_oTPw-duApj"
+            src="/pwa-512x512.png"
           />
         </div>
         <div className="min-w-0 flex-1">

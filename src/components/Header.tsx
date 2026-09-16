@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLanguage } from '../utils/LanguageContext';
 import { generateUserManualPDF } from '../utils/pdfGenerator';
 
@@ -88,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
               <img
                 alt={t('appName')}
                 className="w-9 h-9 rounded-lg object-cover"
-                src="https://lh3.googleusercontent.com/aida/AEtjO1UZCcz2bFo51Sl8nmiu6Dq8jrqZJ-lNWs7WkTa-9edCsar3gTzIfiJ3c9UNsCXWNim2yZjhpCEi7I3gV0jQ1CEZU1tAgYqSX8In9D24hD3TtGxNeseHN1i1VVsC8oiF4z4eLmGd5ML-HXtjJ7TUzH_WHqsNbzjuPx6EpCJhs4SX1NESxgFu46YbE6l54IQXTGYhoUC13TRN1jBVLBZ09VRPUXd596vRjm2j7Mh1PRcfpMP2QqhbzqaR-bo"
+                src="/pwa-192x192.png"
               />
             </div>
             <div className="flex flex-col text-left truncate">
@@ -151,10 +152,19 @@ export const Header: React.FC<HeaderProps> = ({
 
               {showMenu && (
                 <>
-                  <div
-                    className="fixed inset-0 z-[55]"
-                    onClick={() => setShowMenu(false)}
-                  />
+                  {/* Rendered via a portal straight into <body> - the header's
+                      backdrop-blur establishes a new containing block for
+                      `position: fixed` descendants, which was silently
+                      shrinking this "click outside to close" overlay down to
+                      just the header's own bounding box instead of the full
+                      screen. Portaling escapes that entirely. */}
+                  {createPortal(
+                    <div
+                      className="fixed inset-0 z-[55]"
+                      onClick={() => setShowMenu(false)}
+                    />,
+                    document.body
+                  )}
                   <div className="absolute right-0 top-11 z-[60] w-60 bg-white rounded-2xl shadow-xl border border-[#eff4ff] p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150">
                     <div className="px-3 py-1.5 border-b border-[#eff4ff]">
                       <p className="text-[11px] text-[#5a4138] font-medium">{t('dataManagement')}</p>
