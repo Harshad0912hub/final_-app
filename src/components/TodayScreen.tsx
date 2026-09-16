@@ -199,7 +199,6 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   let morningLeave = 0;
   let eveningLeave = 0;
   let totalCollected = 0;
-  let pendingRevenue = 0;
 
   // Veg / Non-Veg cooking counters per session
   let morningVeg = 0;
@@ -235,8 +234,6 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         totalCollected += mPrice;
       } else if (mStatus === 'leave') {
         morningLeave++;
-      } else {
-        pendingRevenue += mPrice;
       }
     }
 
@@ -246,8 +243,6 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
         totalCollected += ePrice;
       } else if (eStatus === 'leave') {
         eveningLeave++;
-      } else {
-        pendingRevenue += ePrice;
       }
     }
   });
@@ -424,9 +419,8 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
               )}
             </div>
           </div>
-          <div className="pt-2 mt-2 bg-[#7cf994]/30 rounded-lg px-2 py-1 flex items-center justify-between text-[#007230]">
+          <div className="pt-2 mt-2 bg-[#7cf994]/30 rounded-lg px-2 py-1 flex items-center text-[#007230]">
             <span className="font-label-sm text-[11px]">{t('collected')}: {formatCurrency(totalCollected)}</span>
-            <span className="font-label-sm text-[11px] font-bold">{t('pendingAmount')}: {formatCurrency(pendingRevenue)}</span>
           </div>
         </div>
       </section>
