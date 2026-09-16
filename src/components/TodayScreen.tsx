@@ -278,7 +278,6 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
   const deliveredTotalTiffins = morningDelivered + eveningDelivered;
   const leaveTotalTiffins = morningLeave + eveningLeave;
   const pendingTotalTiffins = Math.max(0, plannedCount - deliveredTotalTiffins - leaveTotalTiffins);
-  const todayTotalRevenue = totalCollected + pendingRevenue;
 
   // Filter cards based on applicable meal sessions and the search box
   const filteredCustomers = activeCustomers.filter((cust) => {
@@ -415,14 +414,12 @@ export const TodayScreen: React.FC<TodayScreenProps> = ({
             </div>
             <div className="flex items-baseline gap-1.5">
               <h2 className="font-headline-lg-mobile text-[26px] text-[#0b1c30] tracking-tight font-bold">
-                {formatCurrency(todayTotalRevenue)}
+                {formatCurrency(totalCollected)}
               </h2>
-              {todayTotalRevenue > 0 && (
+              {totalCollected > 0 && (
                 <span className="bg-[#7cf994] text-[#007230] rounded-full px-1.5 py-0.5 font-label-sm text-[10px] font-bold flex items-center gap-0.5">
                   <span className="material-symbols-outlined text-[11px]">trending_up</span>
-                  {totalCollected > 0
-                    ? `${Math.min(100, Math.round((totalCollected / todayTotalRevenue) * 100))}%`
-                    : t('planned')}
+                  {language === 'mr' ? 'जमा झाले' : 'Collected'}
                 </span>
               )}
             </div>
