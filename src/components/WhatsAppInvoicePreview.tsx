@@ -16,6 +16,7 @@ interface WhatsAppInvoicePreviewProps {
   leaveDateKeys?: string[];
   noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
   previousMonthsDue?: { monthPrefix: string; due: number }[];
+  extrasTotal?: number;
   onBack: () => void;
   onMarkBillSent?: () => void;
 }
@@ -32,6 +33,7 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
   leaveDateKeys = [],
   noteEntries = [],
   previousMonthsDue = [],
+  extrasTotal = 0,
   onBack,
   onMarkBillSent,
 }) => {
@@ -63,6 +65,9 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
       ? `Leave Days: ${formatNum(totalLeaveDays)}${leaveDatesStr ? ` (${leaveDatesStr})` : ''} - not charged\n`
       : '';
 
+  const extrasLineMr = extrasTotal > 0 ? ` (त्यात जास्तीचे पदार्थ: ${formatCurrency(extrasTotal)})` : '';
+  const extrasLineEn = extrasTotal > 0 ? ` (includes extras: ${formatCurrency(extrasTotal)})` : '';
+
   const previousMonthsDueLinesMr =
     previousMonthsDue.length > 0
       ? `मागील महिन्यांची बाकी:\n${previousMonthsDue
@@ -89,7 +94,7 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
 ${customer.name} — ${monthStr} (${dietLabel})
 
 एकुण टिफीन: ${formatNum(totalTiffins)}
-एकुण रक्कम: ${formatCurrency(totalBill)}
+एकुण रक्कम: ${formatCurrency(totalBill)}${extrasLineMr}
 ${leaveLineMr}ऍडव्हान्स पेमेंट: ${formatCurrency(paidAmount)}
 ${previousMonthsDueLinesMr}उर्वरित रक्कम: ${formatCurrency(dueAmount)}
 
@@ -102,7 +107,7 @@ Mob. 9823784142
 ${customer.name} — ${monthStr} (${dietLabel})
 
 Total Tiffins: ${formatNum(totalTiffins)}
-Total Amount: ${formatCurrency(totalBill)}
+Total Amount: ${formatCurrency(totalBill)}${extrasLineEn}
 ${leaveLineEn}Advance Paid: ${formatCurrency(paidAmount)}
 ${previousMonthsDueLinesEn}Balance Due: ${formatCurrency(dueAmount)}
 
@@ -451,7 +456,7 @@ Thank you!
               generateSingleInvoicePDF(
                 customer,
                 monthStr,
-                { totalTiffins, totalBill, paidAmount, dueAmount, totalLeaveDays, leaveDateKeys, noteEntries, previousMonthsDue },
+                { totalTiffins, totalBill, paidAmount, dueAmount, totalLeaveDays, leaveDateKeys, noteEntries, previousMonthsDue, extrasTotal },
                 payments
               );
             }}

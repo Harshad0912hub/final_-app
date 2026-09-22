@@ -11,6 +11,7 @@ export interface InvoiceMetrics {
   leaveDateKeys?: string[];
   noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
   previousMonthsDue?: { monthPrefix: string; due: number }[];
+  extrasTotal?: number;
 }
 
 const PDF_MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -170,10 +171,23 @@ export function generateSingleInvoicePDF(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(50, 50, 50);
+  const extrasTotal = metrics.extrasTotal ?? 0;
+  const baseOnlyTotal = metrics.totalBill - extrasTotal;
   doc.text(`Tiffin Meal Deliveries (${cleanMonth})`, 20, currentY + 7);
   doc.text(`Rs. ${customer.ratePerTiffin}`, pageWidth - 80, currentY + 7, { align: 'right' });
   doc.text(`${metrics.totalTiffins}`, pageWidth - 50, currentY + 7, { align: 'right' });
-  doc.text(`Rs. ${metrics.totalBill.toLocaleString('en-IN')}`, pageWidth - 20, currentY + 7, { align: 'right' });
+  doc.text(`Rs. ${baseOnlyTotal.toLocaleString('en-IN')}`, pageWidth - 20, currentY + 7, { align: 'right' });
+
+  const hasExtras = extrasTotal > 0;
+  if (hasExtras) {
+    currentY += 8;
+    doc.setTextColor(163, 57, 0);
+    doc.text('Extras (extra tiffin, chapati, etc.)', 20, currentY + 7);
+    doc.text('-', pageWidth - 80, currentY + 7, { align: 'right' });
+    doc.text('-', pageWidth - 50, currentY + 7, { align: 'right' });
+    doc.text(`Rs. ${extrasTotal.toLocaleString('en-IN')}`, pageWidth - 20, currentY + 7, { align: 'right' });
+    doc.setTextColor(50, 50, 50);
+  }
 
   const hasLeaveDays = (metrics.totalLeaveDays ?? 0) > 0;
   if (hasLeaveDays) {
@@ -195,7 +209,7 @@ export function generateSingleInvoicePDF(
     }
   }
 
-  currentY += hasLeaveDays ? 18 : 12;
+  currentY += (hasLeaveDays ? 18 : 12) + (hasExtras ? 8 : 0);
   doc.line(14, currentY, pageWidth - 14, currentY);
 
   // Financial Breakdown Box

@@ -29,6 +29,7 @@ interface ReportsScreenProps {
     leaveDateKeys: string[];
     noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
     previousMonthsDue?: MonthlyDue[];
+    extrasTotal?: number;
   }) => void;
   onMarkBillSent?: (customerId: string) => void;
 }
@@ -148,6 +149,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   let totalTiffins = 0;
   let totalLeaveDays = 0;
   let totalBill = 0;
+  let extrasTotal = 0;
   const leaveDateKeys: string[] = [];
   const noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[] = [];
 
@@ -156,6 +158,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     if (del.morning?.status === 'delivered') {
       totalTiffins++;
       totalBill += del.morning.price ?? selectedCustomer.ratePerTiffin;
+      extrasTotal += (del.morning.extras || []).reduce((sum, e) => sum + e.price, 0);
       if (del.morning.label || (del.morning.extras && del.morning.extras.length > 0)) {
         noteEntries.push({ dateKey: del.dateKey, session: 'morning', price: del.morning.price, label: del.morning.label || '', extras: del.morning.extras });
       }
@@ -166,6 +169,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     if (del.evening?.status === 'delivered') {
       totalTiffins++;
       totalBill += del.evening.price ?? selectedCustomer.ratePerTiffin;
+      extrasTotal += (del.evening.extras || []).reduce((sum, e) => sum + e.price, 0);
       if (del.evening.label || (del.evening.extras && del.evening.extras.length > 0)) {
         noteEntries.push({ dateKey: del.dateKey, session: 'evening', price: del.evening.price, label: del.evening.label || '', extras: del.evening.extras });
       }
@@ -479,6 +483,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               leaveDateKeys,
               noteEntries,
               previousMonthsDue,
+              extrasTotal,
             })
           }
           className="w-full min-h-[50px] bg-[#25D366] hover:bg-[#1EBE5D] active:bg-[#1bb354] text-white p-3 rounded-2xl shadow-sm flex items-center justify-between transition-transform active:scale-[0.99]"
@@ -515,6 +520,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 leaveDateKeys,
                 noteEntries,
                 previousMonthsDue,
+                extrasTotal,
               },
               filteredPayments
             );
