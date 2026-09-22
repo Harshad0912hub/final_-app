@@ -30,6 +30,7 @@ interface ReportsScreenProps {
     noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
     previousMonthsDue?: MonthlyDue[];
     extrasTotal?: number;
+    extrasByDate?: { dateKey: string; items: SelectedExtra[]; dayTotal: number }[];
   }) => void;
   onMarkBillSent?: (customerId: string) => void;
 }
@@ -188,6 +189,24 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   // Oldest first, for a readable list in the invoice
   leaveDateKeys.sort();
+
+  // Which specific date(s) extras were added on, with each item's own name
+  // (already includes its count, e.g. "जास्तीचा डबा x2") and price - so the
+  // bill is verifiable ("on this date I added this") without going back to
+  // a full per-session/price-per-line breakdown of every single day.
+  const extrasByDateMap: Record<string, SelectedExtra[]> = {};
+  noteEntries.forEach((entry) => {
+    if (entry.extras && entry.extras.length > 0) {
+      extrasByDateMap[entry.dateKey] = [...(extrasByDateMap[entry.dateKey] || []), ...entry.extras];
+    }
+  });
+  const extrasByDate = Object.keys(extrasByDateMap)
+    .sort()
+    .map((dateKey) => ({
+      dateKey,
+      items: extrasByDateMap[dateKey],
+      dayTotal: extrasByDateMap[dateKey].reduce((sum, e) => sum + e.price, 0),
+    }));
 
   // Use the customer's precomputed running balance (all bills ever minus all
   // payments ever) as the single source of truth for "how much do they
@@ -484,6 +503,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               noteEntries,
               previousMonthsDue,
               extrasTotal,
+              extrasByDate,
             })
           }
           className="w-full min-h-[50px] bg-[#25D366] hover:bg-[#1EBE5D] active:bg-[#1bb354] text-white p-3 rounded-2xl shadow-sm flex items-center justify-between transition-transform active:scale-[0.99]"
@@ -521,6 +541,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 noteEntries,
                 previousMonthsDue,
                 extrasTotal,
+                extrasByDate,
               },
               filteredPayments
             );

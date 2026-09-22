@@ -444,15 +444,18 @@ export default function App() {
     noteEntries: [] as { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: { name: string; price: number }[] }[],
     previousMonthsDue: [] as { monthPrefix: string; due: number }[],
     extrasTotal: 0,
+    extrasByDate: [] as { dateKey: string; items: { name: string; price: number }[]; dayTotal: number }[],
   });
 
   // Global toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const triggerToast = (msg: string) => {
+  const [toastIsError, setToastIsError] = useState(false);
+  const triggerToast = (msg: string, isError = false) => {
     setToastMessage(msg);
+    setToastIsError(isError);
     setTimeout(() => {
       setToastMessage(null);
-    }, 2500);
+    }, isError ? 5000 : 2500);
   };
 
   // Dynamic Marathi date formatter
@@ -1205,7 +1208,13 @@ export default function App() {
   };
 
   // Handler: Save or Update Advance Payment
-  const handleSavePayment = (paymentData: {
+  // Payments save the cloud copy FIRST and only then update what's shown on
+  // screen - unlike deliveries/holidays/etc., which update the screen right
+  // away and let the cloud save catch up in the background. A silent cloud
+  // failure for a delivery mark is a minor annoyance; for a payment it means
+  // the customer's balance would look paid on this device while the actual
+  // ledger never received it, with no indication anything went wrong.
+  const handleSavePayment = async (paymentData: {
     id?: string;
     amount: number;
     method: 'cash' | 'gpay' | 'bank';
@@ -1214,18 +1223,6 @@ export default function App() {
   }) => {
     if (paymentData.id) {
       const existingPay = payments.find((p) => p.id === paymentData.id);
-      const updatedPayments = payments.map((p) =>
-        p.id === paymentData.id
-          ? {
-              ...p,
-              amount: paymentData.amount,
-              method: paymentData.method,
-              title: paymentData.title,
-              note: paymentData.note,
-            }
-          : p
-      );
-      setPayments(updatedPayments);
       const updatedPayment: PaymentRecord = {
         id: paymentData.id,
         customerId: existingPay?.customerId || selectedCustomerId,
@@ -1235,10 +1232,17 @@ export default function App() {
         title: paymentData.title,
         note: paymentData.note,
       };
+      try {
+        await savePaymentToFirestore(updatedPayment);
+      } catch (err) {
+        console.warn('Payment update to cloud failed:', err);
+        triggerToast('⚠️ पेमेंट सेव्ह झालं नाही! इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.', true);
+        setPaymentToEdit(null);
+        return;
+      }
+      const updatedPayments = payments.map((p) => (p.id === paymentData.id ? updatedPayment : p));
+      setPayments(updatedPayments);
       triggerToast(`₹${paymentData.amount} पेमेंट नोंद अद्ययावत केली!`);
-      savePaymentToFirestore(updatedPayment).catch((err) =>
-        console.warn('Payment update to cloud skipped:', err)
-      );
       recomputeAndSaveCustomerDue(updatedPayment.customerId, updatedPayments);
     } else {
       const newPayment: PaymentRecord = {
@@ -1250,26 +1254,35 @@ export default function App() {
         title: paymentData.title,
         note: paymentData.note,
       };
+      try {
+        await savePaymentToFirestore(newPayment);
+      } catch (err) {
+        console.warn('Payment save to cloud failed:', err);
+        triggerToast('⚠️ पेमेंट सेव्ह झालं नाही! इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.', true);
+        setPaymentToEdit(null);
+        return;
+      }
       const updatedPayments = [newPayment, ...payments];
       setPayments(updatedPayments);
       triggerToast(`₹${paymentData.amount} ॲडव्हान्स जमा नोंदवले!`);
-      savePaymentToFirestore(newPayment).catch((err) =>
-        console.warn('Payment save to cloud skipped:', err)
-      );
       recomputeAndSaveCustomerDue(newPayment.customerId, updatedPayments);
     }
     setPaymentToEdit(null);
   };
 
-  // Handler: Delete Payment
-  const handleDeletePayment = (paymentId: string) => {
+  // Handler: Delete Payment (same cloud-first ordering as save, above)
+  const handleDeletePayment = async (paymentId: string) => {
     const payToDelete = payments.find((p) => p.id === paymentId);
+    try {
+      await deletePaymentFromFirestore(paymentId);
+    } catch (err) {
+      console.warn('Payment delete from cloud failed:', err);
+      triggerToast('⚠️ पेमेंट डिलीट झालं नाही! इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.', true);
+      return;
+    }
     const updatedPayments = payments.filter((p) => p.id !== paymentId);
     setPayments(updatedPayments);
     triggerToast(`₹${payToDelete?.amount || ''} पेमेंट नोंद हटवली.`);
-    deletePaymentFromFirestore(paymentId).catch((err) =>
-      console.warn('Payment delete from cloud skipped:', err)
-    );
     if (payToDelete) {
       recomputeAndSaveCustomerDue(payToDelete.customerId, updatedPayments);
     }
@@ -1346,6 +1359,7 @@ export default function App() {
             noteEntries={invoiceMetrics.noteEntries}
             previousMonthsDue={invoiceMetrics.previousMonthsDue}
             extrasTotal={invoiceMetrics.extrasTotal}
+            extrasByDate={invoiceMetrics.extrasByDate}
             monthStr={getMarathiMonthYearStr()}
             payments={payments}
             onBack={() => setShowWhatsAppInvoice(false)}
@@ -1494,8 +1508,16 @@ export default function App() {
       {/* Delightful Toast Banner */}
       {toastMessage && (
         <div className="fixed top-20 inset-x-4 z-50 flex items-center justify-center pointer-events-none transition-all duration-300">
-          <div className="bg-[#213145] text-[#eaf1ff] px-4 py-2 rounded-full shadow-xl flex items-center gap-2 font-label-md text-[13px] border border-white/10">
-            <span className="material-symbols-outlined text-[#7cf994] text-[18px]">verified</span>
+          <div
+            className={`px-4 py-2 rounded-full shadow-xl flex items-center gap-2 font-label-md text-[13px] border ${
+              toastIsError
+                ? 'bg-[#ba1a1a] text-white border-white/20'
+                : 'bg-[#213145] text-[#eaf1ff] border-white/10'
+            }`}
+          >
+            <span className={`material-symbols-outlined text-[18px] ${toastIsError ? 'text-white' : 'text-[#7cf994]'}`}>
+              {toastIsError ? 'error' : 'verified'}
+            </span>
             <span>{toastMessage}</span>
           </div>
         </div>

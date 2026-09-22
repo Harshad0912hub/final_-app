@@ -252,6 +252,11 @@ export async function updateCustomerDueInFirestore(customerId: string, currentDu
 }
 
 // Payments
+// Payments deliberately re-throw after logging (unlike most other
+// save/delete helpers in this file, which swallow the error) - this is real
+// money, so the caller MUST know if the cloud write actually failed instead
+// of silently updating local state as if it had succeeded, which would show
+// a customer's balance as paid when the payment was never actually saved.
 export async function savePaymentToFirestore(payment: PaymentRecord): Promise<void> {
   try {
     const docRef = doc(db, PAYMENTS_COLLECTION, payment.id);
@@ -261,6 +266,7 @@ export async function savePaymentToFirestore(payment: PaymentRecord): Promise<vo
     });
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${PAYMENTS_COLLECTION}/${payment.id}`);
+    throw err;
   }
 }
 
@@ -270,6 +276,7 @@ export async function deletePaymentFromFirestore(paymentId: string): Promise<voi
     await deleteDoc(docRef);
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `${PAYMENTS_COLLECTION}/${paymentId}`);
+    throw err;
   }
 }
 

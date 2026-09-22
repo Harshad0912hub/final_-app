@@ -12,6 +12,7 @@ export interface InvoiceMetrics {
   noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
   previousMonthsDue?: { monthPrefix: string; due: number }[];
   extrasTotal?: number;
+  extrasByDate?: { dateKey: string; items: SelectedExtra[]; dayTotal: number }[];
 }
 
 const PDF_MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -179,6 +180,7 @@ export function generateSingleInvoicePDF(
   doc.text(`Rs. ${baseOnlyTotal.toLocaleString('en-IN')}`, pageWidth - 20, currentY + 7, { align: 'right' });
 
   const hasExtras = extrasTotal > 0;
+  const extrasByDate = metrics.extrasByDate || [];
   if (hasExtras) {
     currentY += 8;
     doc.setTextColor(163, 57, 0);
@@ -187,6 +189,28 @@ export function generateSingleInvoicePDF(
     doc.text('-', pageWidth - 50, currentY + 7, { align: 'right' });
     doc.text(`Rs. ${extrasTotal.toLocaleString('en-IN')}`, pageWidth - 20, currentY + 7, { align: 'right' });
     doc.setTextColor(50, 50, 50);
+
+    if (extrasByDate.length > 0) {
+      currentY += 6;
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(120, 90, 60);
+      // jsPDF's built-in font can't render Devanagari - only print an
+      // item's actual name when it's plain ASCII (e.g. typed in English
+      // mode); otherwise fall back to a generic count so nothing garbles.
+      const isAsciiSafe = (s: string) => /^[\x00-\x7F]*$/.test(s);
+      const dateList = extrasByDate
+        .map((d) => {
+          const label = d.items.every((it) => isAsciiSafe(it.name))
+            ? d.items.map((it) => it.name).join(', ')
+            : `${d.items.length} item(s)`;
+          return `${formatDateKeyForPDF(d.dateKey)}: ${label} (Rs. ${d.dayTotal})`;
+        })
+        .join('; ');
+      doc.text(`Extras by date: ${dateList}`, 20, currentY + 6, { maxWidth: pageWidth - 40 });
+      doc.setFont('helvetica', 'normal');
+      currentY += 6;
+    }
   }
 
   const hasLeaveDays = (metrics.totalLeaveDays ?? 0) > 0;
@@ -209,7 +233,7 @@ export function generateSingleInvoicePDF(
     }
   }
 
-  currentY += (hasLeaveDays ? 18 : 12) + (hasExtras ? 8 : 0);
+  currentY += (hasLeaveDays ? 18 : 12) + (hasExtras ? (extrasByDate.length > 0 ? 14 : 8) : 0);
   doc.line(14, currentY, pageWidth - 14, currentY);
 
   // Financial Breakdown Box

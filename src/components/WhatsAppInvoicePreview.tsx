@@ -17,6 +17,7 @@ interface WhatsAppInvoicePreviewProps {
   noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
   previousMonthsDue?: { monthPrefix: string; due: number }[];
   extrasTotal?: number;
+  extrasByDate?: { dateKey: string; items: SelectedExtra[]; dayTotal: number }[];
   onBack: () => void;
   onMarkBillSent?: () => void;
 }
@@ -34,6 +35,7 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
   noteEntries = [],
   previousMonthsDue = [],
   extrasTotal = 0,
+  extrasByDate = [],
   onBack,
   onMarkBillSent,
 }) => {
@@ -65,8 +67,17 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
       ? `Leave Days: ${formatNum(totalLeaveDays)}${leaveDatesStr ? ` (${leaveDatesStr})` : ''} - not charged\n`
       : '';
 
+  // Each item's name already includes its own count when relevant (e.g. the
+  // Extra Tiffin quick-add names itself "जास्तीचा डबा x2" for 2 units), so
+  // just listing the names verbatim naturally shows "how many" too.
+  const extrasByDateText = extrasByDate
+    .map((d) => `- ${formatLeaveDateKey(d.dateKey)}: ${d.items.map((it: SelectedExtra) => `${it.name} (+${formatCurrency(it.price)})`).join(', ')}`)
+    .join('\n');
+
   const extrasLineMr = extrasTotal > 0 ? ` (त्यात जास्तीचे पदार्थ: ${formatCurrency(extrasTotal)})` : '';
   const extrasLineEn = extrasTotal > 0 ? ` (includes extras: ${formatCurrency(extrasTotal)})` : '';
+  const extrasDetailLinesMr = extrasByDate.length > 0 ? `\n${extrasByDateText}\n` : '';
+  const extrasDetailLinesEn = extrasByDate.length > 0 ? `\n${extrasByDateText}\n` : '';
 
   const previousMonthsDueLinesMr =
     previousMonthsDue.length > 0
@@ -95,7 +106,7 @@ ${customer.name} — ${monthStr} (${dietLabel})
 
 एकुण टिफीन: ${formatNum(totalTiffins)}
 एकुण रक्कम: ${formatCurrency(totalBill)}${extrasLineMr}
-${leaveLineMr}ऍडव्हान्स पेमेंट: ${formatCurrency(paidAmount)}
+${extrasDetailLinesMr}${leaveLineMr}ऍडव्हान्स पेमेंट: ${formatCurrency(paidAmount)}
 ${previousMonthsDueLinesMr}उर्वरित रक्कम: ${formatCurrency(dueAmount)}
 
 धन्यवाद!
@@ -108,7 +119,7 @@ ${customer.name} — ${monthStr} (${dietLabel})
 
 Total Tiffins: ${formatNum(totalTiffins)}
 Total Amount: ${formatCurrency(totalBill)}${extrasLineEn}
-${leaveLineEn}Advance Paid: ${formatCurrency(paidAmount)}
+${extrasDetailLinesEn}${leaveLineEn}Advance Paid: ${formatCurrency(paidAmount)}
 ${previousMonthsDueLinesEn}Balance Due: ${formatCurrency(dueAmount)}
 
 Thank you!
@@ -320,6 +331,35 @@ Thank you!
         </div>
       )}
 
+      {/* Extras by date - which day(s) extras were added, with each item's
+          own name (already shows count, e.g. "जास्तीचा डबा x2") and price -
+          verifiable without a confusing per-session/price-per-line list of
+          every single day. */}
+      {extrasByDate.length > 0 && (
+        <div className="mt-2.5 bg-[#fff3e0] rounded-2xl p-3 flex items-start gap-2 border border-[#ffdbce]">
+          <span className="material-symbols-outlined text-[18px] text-[#a33900] shrink-0 mt-0.5">
+            add_shopping_cart
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-label-md text-[12px] text-[#6e3900] font-bold mb-1">
+              {language === 'mr' ? 'जास्तीचे पदार्थ (तारखेनुसार)' : 'Extras (by date)'}
+            </p>
+            <div className="flex flex-col gap-1">
+              {extrasByDate.map((d) => (
+                <div key={d.dateKey} className="flex items-center justify-between gap-2">
+                  <span className="font-body-sm text-[11px] text-[#5a4138] min-w-0 truncate">
+                    {formatLeaveDateKey(d.dateKey)}: {d.items.map((it) => it.name).join(', ')}
+                  </span>
+                  <span className="font-label-sm text-[11px] text-[#a33900] font-bold shrink-0">
+                    +{formatCurrency(d.dayTotal)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* WhatsApp Authentic Chat Canvas & Message Bubble */}
       <div className="mt-4">
         <div className="flex items-center justify-between px-1 mb-1.5">
@@ -456,7 +496,7 @@ Thank you!
               generateSingleInvoicePDF(
                 customer,
                 monthStr,
-                { totalTiffins, totalBill, paidAmount, dueAmount, totalLeaveDays, leaveDateKeys, noteEntries, previousMonthsDue, extrasTotal },
+                { totalTiffins, totalBill, paidAmount, dueAmount, totalLeaveDays, leaveDateKeys, noteEntries, previousMonthsDue, extrasTotal, extrasByDate },
                 payments
               );
             }}
