@@ -442,6 +442,7 @@ export default function App() {
     totalLeaveDays: 0,
     leaveDateKeys: [] as string[],
     noteEntries: [] as { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: { name: string; price: number }[] }[],
+    previousMonthsDue: [] as { monthPrefix: string; due: number }[],
   });
 
   // Global toast feedback
@@ -1342,6 +1343,7 @@ export default function App() {
             totalLeaveDays={invoiceMetrics.totalLeaveDays}
             leaveDateKeys={invoiceMetrics.leaveDateKeys}
             noteEntries={invoiceMetrics.noteEntries}
+            previousMonthsDue={invoiceMetrics.previousMonthsDue}
             monthStr={getMarathiMonthYearStr()}
             payments={payments}
             onBack={() => setShowWhatsAppInvoice(false)}

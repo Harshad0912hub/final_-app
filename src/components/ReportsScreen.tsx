@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Customer, PaymentRecord, DayDelivery, SelectedExtra } from '../types';
 import { useLanguage } from '../utils/LanguageContext';
 import {
@@ -7,6 +7,8 @@ import {
 } from '../utils/pdfGenerator';
 import { exportMonthlyCrossCheckCSV } from '../utils/csvExporter';
 import { getTodayDateKey } from '../utils/dateUtils';
+import { fetchCustomerDeliveryHistory } from '../firebase';
+import { computeMonthlyDueBreakdown, getMonthLabel, type MonthlyDue } from '../utils/duesUtils';
 
 interface ReportsScreenProps {
   customers: Customer[];
@@ -26,6 +28,7 @@ interface ReportsScreenProps {
     totalLeaveDays: number;
     leaveDateKeys: string[];
     noteEntries: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
+    previousMonthsDue?: MonthlyDue[];
   }) => void;
   onMarkBillSent?: (customerId: string) => void;
 }
@@ -49,6 +52,24 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   const selectedCustomer =
     customers.find((c) => c.id === selectedCustomerId) || customers[0];
+
+  // Full delivery history for just this one customer (not the app-wide
+  // ~90-day rolling window) - needed to correctly attribute any leftover
+  // due to the specific older month(s) it actually came from.
+  const [fullHistory, setFullHistory] = useState<DayDelivery[]>([]);
+  useEffect(() => {
+    let isMounted = true;
+    if (selectedCustomer) {
+      fetchCustomerDeliveryHistory(selectedCustomer.id).then((history) => {
+        if (isMounted) setFullHistory(history);
+      });
+    } else {
+      setFullHistory([]);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCustomer?.id]);
 
   if (!selectedCustomer || customers.length === 0) {
     return (
@@ -171,6 +192,19 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   // payments) double-counts the same payments whenever more than one month
   // is unpaid, silently understating real arrears.
   const dueAmount = selectedCustomer.currentDue ?? Math.max(0, totalBill - totalPaid);
+
+  // Which specific prior month(s) the leftover due is actually coming from -
+  // e.g. "August: ₹400" - rather than one unexplained lump total.
+  const monthlyDueBreakdown: MonthlyDue[] = computeMonthlyDueBreakdown(
+    selectedCustomer,
+    fullHistory,
+    payments,
+    activeMonthPrefix
+  );
+  // Passed as raw monthPrefix (not a pre-formatted label) so the PDF bill
+  // can render it in plain English regardless of the current UI language -
+  // jsPDF's built-in font can't render Devanagari script.
+  const previousMonthsDue = monthlyDueBreakdown;
 
   return (
     <div className="flex flex-col w-full gap-3.5 pb-20 pt-1">
@@ -412,6 +446,24 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         </div>
       </div>
 
+      {/* Previous months' unpaid balance - shows exactly which month(s) any
+          leftover due is actually coming from, instead of one unexplained
+          lump total. */}
+      {monthlyDueBreakdown.length > 0 && (
+        <div className="bg-[#ffdad6]/30 rounded-2xl p-3 border border-[#ba1a1a]/15 flex flex-col gap-1.5">
+          <p className="font-label-sm text-[12px] text-[#ba1a1a] font-bold flex items-center gap-1">
+            <span className="material-symbols-outlined text-[15px]">history</span>
+            {language === 'mr' ? 'मागील महिन्यांची बाकी' : "Previous months' balance"}
+          </p>
+          {monthlyDueBreakdown.map((m) => (
+            <div key={m.monthPrefix} className="flex items-center justify-between px-1">
+              <span className="font-body-sm text-[12px] text-[#5a4138]">{getMonthLabel(m.monthPrefix, language)}</span>
+              <span className="font-label-sm text-[12px] text-[#ba1a1a] font-bold">{formatCurrency(m.due)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Invoice Actions Row: WhatsApp & Single PDF Bill */}
       <div className="flex flex-col gap-2">
         <button
@@ -426,6 +478,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               totalLeaveDays,
               leaveDateKeys,
               noteEntries,
+              previousMonthsDue,
             })
           }
           className="w-full min-h-[50px] bg-[#25D366] hover:bg-[#1EBE5D] active:bg-[#1bb354] text-white p-3 rounded-2xl shadow-sm flex items-center justify-between transition-transform active:scale-[0.99]"
@@ -461,6 +514,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 totalLeaveDays,
                 leaveDateKeys,
                 noteEntries,
+                previousMonthsDue,
               },
               filteredPayments
             );

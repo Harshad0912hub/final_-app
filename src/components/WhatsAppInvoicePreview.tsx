@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Customer, PaymentRecord, SelectedExtra } from '../types';
 import { useLanguage } from '../utils/LanguageContext';
 import { generateSingleInvoicePDF } from '../utils/pdfGenerator';
+import { getMonthLabel } from '../utils/duesUtils';
 
 interface WhatsAppInvoicePreviewProps {
   customer: Customer;
@@ -14,6 +15,7 @@ interface WhatsAppInvoicePreviewProps {
   totalLeaveDays?: number;
   leaveDateKeys?: string[];
   noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
+  previousMonthsDue?: { monthPrefix: string; due: number }[];
   onBack: () => void;
   onMarkBillSent?: () => void;
 }
@@ -29,6 +31,7 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
   totalLeaveDays = 0,
   leaveDateKeys = [],
   noteEntries = [],
+  previousMonthsDue = [],
   onBack,
   onMarkBillSent,
 }) => {
@@ -60,27 +63,16 @@ export const WhatsAppInvoicePreview: React.FC<WhatsAppInvoicePreviewProps> = ({
       ? `Leave Days: ${formatNum(totalLeaveDays)}${leaveDatesStr ? ` (${leaveDatesStr})` : ''} - not charged\n`
       : '';
 
-  const formatExtrasForText = (extras?: SelectedExtra[]) =>
-    extras && extras.length > 0 ? extras.map((ex) => `${ex.name} (+₹${ex.price})`).join(', ') : '';
-
-  const noteLinesMr =
-    noteEntries.length > 0
-      ? `\nविशेष नोंदी:\n${noteEntries
-          .map((e) => {
-            const extrasText = formatExtrasForText(e.extras);
-            const detail = [extrasText, e.label].filter(Boolean).join(' · ');
-            return `- ${formatLeaveDateKey(e.dateKey)} (${e.session === 'morning' ? 'सकाळ' : 'संध्याकाळ'}, ₹${e.price})${detail ? `: ${detail}` : ''}`;
-          })
+  const previousMonthsDueLinesMr =
+    previousMonthsDue.length > 0
+      ? `मागील महिन्यांची बाकी:\n${previousMonthsDue
+          .map((m) => `- ${getMonthLabel(m.monthPrefix, 'mr')}: ${formatCurrency(m.due)}`)
           .join('\n')}\n`
       : '';
-  const noteLinesEn =
-    noteEntries.length > 0
-      ? `\nSpecial Notes:\n${noteEntries
-          .map((e) => {
-            const extrasText = formatExtrasForText(e.extras);
-            const detail = [extrasText, e.label].filter(Boolean).join(' · ');
-            return `- ${formatLeaveDateKey(e.dateKey)} (${e.session === 'morning' ? 'Morning' : 'Evening'}, ₹${e.price})${detail ? `: ${detail}` : ''}`;
-          })
+  const previousMonthsDueLinesEn =
+    previousMonthsDue.length > 0
+      ? `Previous Months' Balance:\n${previousMonthsDue
+          .map((m) => `- ${getMonthLabel(m.monthPrefix, 'en')}: ${formatCurrency(m.due)}`)
           .join('\n')}\n`
       : '';
 
@@ -99,8 +91,8 @@ ${customer.name} — ${monthStr} (${dietLabel})
 एकुण टिफीन: ${formatNum(totalTiffins)}
 एकुण रक्कम: ${formatCurrency(totalBill)}
 ${leaveLineMr}ऍडव्हान्स पेमेंट: ${formatCurrency(paidAmount)}
-उर्वरित रक्कम: ${formatCurrency(dueAmount)}
-${noteLinesMr}
+${previousMonthsDueLinesMr}उर्वरित रक्कम: ${formatCurrency(dueAmount)}
+
 धन्यवाद!
 
 ⚠️ ${policyNoticeMr}`
@@ -112,8 +104,8 @@ ${customer.name} — ${monthStr} (${dietLabel})
 Total Tiffins: ${formatNum(totalTiffins)}
 Total Amount: ${formatCurrency(totalBill)}
 ${leaveLineEn}Advance Paid: ${formatCurrency(paidAmount)}
-Balance Due: ${formatCurrency(dueAmount)}
-${noteLinesEn}
+${previousMonthsDueLinesEn}Balance Due: ${formatCurrency(dueAmount)}
+
 Thank you!
 
 ⚠️ ${policyNoticeEn}`;
@@ -300,21 +292,22 @@ Thank you!
         </div>
       )}
 
-      {/* Special Notes - custom-priced days (extra dabba, extra chapati etc.) */}
-      {noteEntries.length > 0 && (
-        <div className="mt-2.5 bg-[#eff4ff] rounded-2xl p-3 flex items-start gap-2 border border-[#dce9ff]">
-          <span className="material-symbols-outlined text-[18px] text-[#a33900] shrink-0 mt-0.5">
-            edit_note
+      {/* Previous Months' Balance - which specific earlier month(s) the
+          leftover due is actually coming from */}
+      {previousMonthsDue.length > 0 && (
+        <div className="mt-2.5 bg-[#ffdad6]/40 rounded-2xl p-3 flex items-start gap-2 border border-[#ba1a1a]/15">
+          <span className="material-symbols-outlined text-[18px] text-[#ba1a1a] shrink-0 mt-0.5">
+            history
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-label-md text-[12px] text-[#0b1c30] font-bold mb-1">
-              {language === 'mr' ? 'विशेष नोंदी' : 'Special Notes'}
+            <p className="font-label-md text-[12px] text-[#ba1a1a] font-bold mb-1">
+              {language === 'mr' ? 'मागील महिन्यांची बाकी' : "Previous Months' Balance"}
             </p>
             <div className="flex flex-col gap-0.5">
-              {noteEntries.map((entry, idx) => (
-                <p key={idx} className="font-body-sm text-[11px] text-[#5a4138]">
-                  {formatLeaveDateKey(entry.dateKey)} ({entry.session === 'morning' ? (language === 'mr' ? 'सकाळ' : 'Morning') : (language === 'mr' ? 'संध्याकाळ' : 'Evening')}, {formatCurrency(entry.price)}):{' '}
-                  {[formatExtrasForText(entry.extras), entry.label].filter(Boolean).join(' · ')}
+              {previousMonthsDue.map((m) => (
+                <p key={m.monthPrefix} className="font-body-sm text-[11px] text-[#5a4138] flex items-center justify-between">
+                  <span>{getMonthLabel(m.monthPrefix, language)}</span>
+                  <span className="font-bold text-[#ba1a1a]">{formatCurrency(m.due)}</span>
                 </p>
               ))}
             </div>
@@ -458,7 +451,7 @@ Thank you!
               generateSingleInvoicePDF(
                 customer,
                 monthStr,
-                { totalTiffins, totalBill, paidAmount, dueAmount, totalLeaveDays, leaveDateKeys, noteEntries },
+                { totalTiffins, totalBill, paidAmount, dueAmount, totalLeaveDays, leaveDateKeys, noteEntries, previousMonthsDue },
                 payments
               );
             }}

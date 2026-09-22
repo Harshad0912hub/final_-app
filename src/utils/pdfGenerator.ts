@@ -10,6 +10,7 @@ export interface InvoiceMetrics {
   totalLeaveDays?: number;
   leaveDateKeys?: string[];
   noteEntries?: { dateKey: string; session: 'morning' | 'evening'; price: number; label: string; extras?: SelectedExtra[] }[];
+  previousMonthsDue?: { monthPrefix: string; due: number }[];
 }
 
 const PDF_MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -17,6 +18,13 @@ const PDF_MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'
 function formatDateKeyForPDF(key: string): string {
   const [, m, d] = key.split('-').map(Number);
   return `${d} ${PDF_MONTH_ABBREV[m - 1] || ''}`.trim();
+}
+
+const PDF_MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function formatMonthPrefixForPDF(monthPrefix: string): string {
+  const [y, m] = monthPrefix.split('-').map(Number);
+  return `${PDF_MONTH_FULL[m - 1] || ''} ${y}`.trim();
 }
 
 /**
@@ -213,28 +221,27 @@ export function generateSingleInvoicePDF(
   doc.text('BALANCE DUE:', boxX, currentY + 8);
   doc.text(`Rs. ${metrics.dueAmount.toLocaleString('en-IN')}`, pageWidth - 20, currentY + 8, { align: 'right' });
 
-  // Special Notes (custom-priced deliveries - extra chapati, extra dabba etc.)
+  // Note: per-day extras (extra chapati, extra dabba etc.) are deliberately
+  // NOT itemized separately here - each day's price already correctly
+  // includes them, and a separate breakdown just confused customers reading
+  // the bill without changing the total.
   currentY += 22;
-  if (metrics.noteEntries && metrics.noteEntries.length > 0) {
+
+  // Previous Months' Balance (which specific earlier month(s) the leftover
+  // due is coming from, so it isn't one unexplained lump total)
+  if (metrics.previousMonthsDue && metrics.previousMonthsDue.length > 0) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(11, 28, 48);
-    doc.text('Special Notes:', 14, currentY);
+    doc.text("Previous Months' Balance:", 14, currentY);
 
     currentY += 4;
     doc.setFontSize(9);
-    metrics.noteEntries.forEach((entry) => {
+    metrics.previousMonthsDue.forEach((m) => {
       currentY += 6;
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(141, 75, 0);
-      const cleanDate = formatDateKeyForPDF(entry.dateKey);
-      const sessionLabel = entry.session === 'morning' ? 'Morning' : 'Evening';
-      const extrasText =
-        entry.extras && entry.extras.length > 0
-          ? entry.extras.map((ex) => `${ex.name} (+Rs. ${ex.price})`).join(', ')
-          : '';
-      const detail = [extrasText, entry.label].filter(Boolean).join(' | ');
-      doc.text(`- ${cleanDate} (${sessionLabel}, Rs. ${entry.price})${detail ? `: ${detail}` : ''}`, 18, currentY);
+      doc.setTextColor(186, 26, 26);
+      doc.text(`- ${formatMonthPrefixForPDF(m.monthPrefix)}: Rs. ${m.due.toLocaleString('en-IN')}`, 18, currentY);
     });
     currentY += 6;
   }

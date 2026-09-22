@@ -43,10 +43,14 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
   const [selectedDiet, setSelectedDiet] = useState<DietType>(currentDietType || customer?.dietType || 'veg');
   const [note, setNote] = useState<string>(currentLabel || '');
   const [showCustomBox, setShowCustomBox] = useState(false);
-  const [selectedExtraNames, setSelectedExtraNames] = useState<string[]>((currentExtras || []).map((e) => e.name));
+  const [selectedExtraNames, setSelectedExtraNames] = useState<string[]>([]);
   const [showAddExtraForm, setShowAddExtraForm] = useState(false);
   const [newExtraName, setNewExtraName] = useState('');
   const [newExtraPrice, setNewExtraPrice] = useState('');
+  const [extraTiffinQty, setExtraTiffinQty] = useState(0);
+
+  const extraTiffinName = language === 'mr' ? 'जास्तीचा डबा' : 'Extra Tiffin';
+  const isExtraTiffinEntry = (name: string) => name === 'जास्तीचा डबा' || name === 'Extra Tiffin';
 
   useEffect(() => {
     // The base price previously stored already includes any extras that
@@ -57,7 +61,12 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
     setBasePrice(Math.max(0, defaultP));
     setSelectedDiet(currentDietType || customer?.dietType || 'veg');
     setNote(currentLabel || '');
-    setSelectedExtraNames((currentExtras || []).map((e) => e.name));
+    // "Extra Tiffin" is its own dedicated quick-add control (priced at the
+    // customer's own rate), not a catalog entry - split it back out here.
+    const extraTiffinEntry = (currentExtras || []).find((e) => isExtraTiffinEntry(e.name));
+    const rate = customer?.ratePerTiffin || 1;
+    setExtraTiffinQty(extraTiffinEntry ? Math.max(1, Math.round(extraTiffinEntry.price / rate)) : 0);
+    setSelectedExtraNames((currentExtras || []).filter((e) => !isExtraTiffinEntry(e.name)).map((e) => e.name));
     // If current price is not standard preset, open custom box
     if (![55, 60, 65, 70, 75, 80].includes(defaultP)) {
       setShowCustomBox(true);
@@ -66,10 +75,17 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
 
   // Resolve selected extra names against the live catalog so price edits to
   // a catalog item are reflected immediately, and compute the running total.
-  const selectedExtras: SelectedExtra[] = selectedExtraNames
+  const catalogExtras: SelectedExtra[] = selectedExtraNames
     .map((name) => extraItems.find((it) => it.name === name))
     .filter((it): it is ExtraItem => !!it)
     .map((it) => ({ name: it.name, price: it.price }));
+  const extraTiffinPrice = extraTiffinQty * (customer?.ratePerTiffin || 0);
+  const selectedExtras: SelectedExtra[] = [
+    ...(extraTiffinQty > 0
+      ? [{ name: extraTiffinQty > 1 ? `${extraTiffinName} x${extraTiffinQty}` : extraTiffinName, price: extraTiffinPrice }]
+      : []),
+    ...catalogExtras,
+  ];
   const extrasTotal = selectedExtras.reduce((sum, e) => sum + e.price, 0);
   const selectedPrice = basePrice + extrasTotal;
 
@@ -348,6 +364,36 @@ export const PricePickerModal: React.FC<PricePickerModalProps> = ({
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Extra Tiffin: one-tap shortcut for an additional tiffin at this
+            customer's own rate - no need to create/search a catalog item. */}
+        <div className="mb-3 bg-[#fff3e0] p-3 rounded-2xl border border-[#ffdbce] flex items-center justify-between">
+          <span className="font-label-sm text-[13px] text-[#6e3900] font-bold flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[18px] text-[#a33900]">add_box</span>
+            <span>
+              {extraTiffinName}
+              {extraTiffinQty > 0 && <span className="text-[#a33900]"> (+{formatCurrency(extraTiffinPrice)})</span>}
+            </span>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setExtraTiffinQty((q) => Math.max(0, q - 1))}
+              disabled={extraTiffinQty === 0}
+              className="w-8 h-8 rounded-full bg-white text-[#a33900] font-bold text-[16px] shadow-xs border border-[#ffdbce] active:scale-90 disabled:opacity-40 disabled:active:scale-100 transition-all"
+            >
+              −
+            </button>
+            <span className="w-5 text-center font-label-md text-[14px] font-bold text-[#0b1c30]">{extraTiffinQty}</span>
+            <button
+              type="button"
+              onClick={() => setExtraTiffinQty((q) => q + 1)}
+              className="w-8 h-8 rounded-full bg-[#a33900] text-white font-bold text-[16px] shadow-xs active:scale-90 transition-all"
+            >
+              +
+            </button>
           </div>
         </div>
 
