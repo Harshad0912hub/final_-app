@@ -493,12 +493,21 @@ Thank you!
             type="button"
             onClick={() => {
               onMarkBillSent?.();
-              generateSingleInvoicePDF(
-                customer,
-                monthStr,
-                { totalTiffins, totalBill, paidAmount, dueAmount, totalLeaveDays, leaveDateKeys, noteEntries, previousMonthsDue, extrasTotal, extrasByDate },
-                payments
-              );
+              try {
+                generateSingleInvoicePDF(
+                  customer,
+                  monthStr,
+                  { totalTiffins, totalBill, paidAmount, dueAmount, totalLeaveDays, leaveDateKeys, noteEntries, previousMonthsDue, extrasTotal, extrasByDate },
+                  payments
+                );
+              } catch (err) {
+                console.error('Invoice PDF generation failed:', err);
+                alert(
+                  language === 'mr'
+                    ? 'PDF तयार करताना त्रुटी आली. कृपया पुन्हा प्रयत्न करा.'
+                    : 'Could not generate the PDF. Please try again.'
+                );
+              }
             }}
             className="h-11 rounded-full bg-[#eff4ff] hover:bg-[#dce9ff] text-[#0b1c30] flex items-center justify-center gap-1.5 font-label-md text-[13px] font-semibold active:scale-95 transition-all"
           >

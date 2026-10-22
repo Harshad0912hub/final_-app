@@ -358,14 +358,23 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
         <button
           type="button"
-          onClick={() =>
-            generateMonthlyCrossCheckPDF(
-              customers,
-              monthsList[selectedMonthIndex],
-              payments,
-              dayDeliveries
-            )
-          }
+          onClick={() => {
+            try {
+              generateMonthlyCrossCheckPDF(
+                customers,
+                monthsList[selectedMonthIndex],
+                payments,
+                dayDeliveries
+              );
+            } catch (err) {
+              console.error('Cross-check PDF generation failed:', err);
+              alert(
+                language === 'mr'
+                  ? 'PDF तयार करताना त्रुटी आली. कृपया पुन्हा प्रयत्न करा.'
+                  : 'Could not generate the PDF. Please try again.'
+              );
+            }
+          }}
           className="w-full h-11 px-4 rounded-xl bg-[#a33900] hover:bg-[#8d4b00] active:scale-98 text-white font-label-md text-[13px] font-bold flex items-center justify-center gap-2 shadow-sm transition-all"
         >
           <span className="material-symbols-outlined text-[19px]">download</span>
@@ -528,23 +537,32 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           type="button"
           onClick={() => {
             onMarkBillSent?.(selectedCustomer.id);
-            generateSingleInvoicePDF(
-              selectedCustomer,
-              monthsList[selectedMonthIndex],
-              {
-                totalTiffins,
-                totalBill,
-                paidAmount: totalPaid,
-                dueAmount,
-                totalLeaveDays,
-                leaveDateKeys,
-                noteEntries,
-                previousMonthsDue,
-                extrasTotal,
-                extrasByDate,
-              },
-              filteredPayments
-            );
+            try {
+              generateSingleInvoicePDF(
+                selectedCustomer,
+                monthsList[selectedMonthIndex],
+                {
+                  totalTiffins,
+                  totalBill,
+                  paidAmount: totalPaid,
+                  dueAmount,
+                  totalLeaveDays,
+                  leaveDateKeys,
+                  noteEntries,
+                  previousMonthsDue,
+                  extrasTotal,
+                  extrasByDate,
+                },
+                filteredPayments
+              );
+            } catch (err) {
+              console.error('Invoice PDF generation failed:', err);
+              alert(
+                language === 'mr'
+                  ? 'PDF तयार करताना त्रुटी आली. कृपया पुन्हा प्रयत्न करा.'
+                  : 'Could not generate the PDF. Please try again.'
+              );
+            }
           }}
           className="w-full min-h-[46px] bg-[#eff4ff] hover:bg-[#dce9ff] text-[#0b1c30] p-3 rounded-2xl shadow-xs flex items-center justify-between border border-[#ffdbce]/60 transition-transform active:scale-[0.99]"
         >

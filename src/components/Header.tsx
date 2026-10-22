@@ -304,7 +304,16 @@ export const Header: React.FC<HeaderProps> = ({
                       type="button"
                       onClick={() => {
                         setShowMenu(false);
-                        generateUserManualPDF();
+                        try {
+                          generateUserManualPDF();
+                        } catch (err) {
+                          console.error('User manual PDF generation failed:', err);
+                          alert(
+                            language === 'mr'
+                              ? 'PDF तयार करताना त्रुटी आली. कृपया ब्राउझर अपडेट करा किंवा पुन्हा प्रयत्न करा.'
+                              : 'Could not generate the PDF. Please update your browser or try again.'
+                          );
+                        }
                       }}
                       className="flex items-center gap-2.5 px-3 py-2 text-left rounded-xl text-[13px] font-semibold text-[#0b1c30] hover:bg-[#eff4ff] active:scale-98 transition-all"
                     >
