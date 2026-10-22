@@ -150,22 +150,24 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="material-symbols-outlined text-[21px]">more_vert</span>
               </button>
 
-              {showMenu && (
+              {showMenu && createPortal(
                 <>
-                  {/* Rendered via a portal straight into <body> - the header's
-                      backdrop-blur establishes a new containing block for
-                      `position: fixed` descendants, which was silently
-                      shrinking this "click outside to close" overlay down to
-                      just the header's own bounding box instead of the full
-                      screen. Portaling escapes that entirely. */}
-                  {createPortal(
-                    <div
-                      className="fixed inset-0 z-[55]"
-                      onClick={() => setShowMenu(false)}
-                    />,
-                    document.body
-                  )}
-                  <div className="absolute right-0 top-11 z-[60] w-60 bg-white rounded-2xl shadow-xl border border-[#eff4ff] p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150">
+                  {/* Both the backdrop AND the menu are portaled into <body>
+                      together, as siblings in the same stacking context. The
+                      header has backdrop-blur-xl, which creates its own
+                      stacking context - portaling only the backdrop (and
+                      leaving the menu nested inside the header) meant the
+                      menu's z-[60] was compared against the header's z-40
+                      from outside, not against the backdrop's z-[55], so the
+                      backdrop silently sat on top and ate every tap meant for
+                      the menu's buttons (Dark Mode, User Manual PDF, etc). */}
+                  <div
+                    className="fixed inset-0 z-[55]"
+                    onClick={() => setShowMenu(false)}
+                  />
+                  <div className="fixed inset-x-0 top-16 z-[60] flex justify-center pointer-events-none">
+                    <div className="w-full max-w-md px-3 flex justify-end">
+                      <div className="w-60 bg-white rounded-2xl shadow-xl border border-[#eff4ff] p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150 pointer-events-auto">
                     <div className="px-3 py-1.5 border-b border-[#eff4ff]">
                       <p className="text-[11px] text-[#5a4138] font-medium">{t('dataManagement')}</p>
                       <p className="text-[12px] font-bold text-[#0b1c30]">
@@ -376,8 +378,11 @@ export const Header: React.FC<HeaderProps> = ({
                       <span className="material-symbols-outlined text-[18px]">delete_sweep</span>
                       <span>{t('clearAllData')}</span>
                     </button>
+                      </div>
+                    </div>
                   </div>
-                </>
+                </>,
+                document.body
               )}
             </div>
           </div>
